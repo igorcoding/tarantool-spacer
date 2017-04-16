@@ -62,7 +62,7 @@ box.space.space1:update(
 You can easily transform a given tuple to a dictionary-like object and vice-a-versa.
 
 These are the functions:
-* `T.space_name.dict` or `T.space_name.hahs` - transforms a tuple to a dictionary
+* `T.space_name.dict` or `T.space_name.hash` - transforms a tuple to a dictionary
 * `T.space_name.tuple` - transforms a dictionary back to a tuple
 
 ```lua
