@@ -61,7 +61,7 @@ local function _tuple2hash ( f )
 	for k,v in ipairs(idx) do
 		table.insert(rows,"\t"..v.." = t["..tostring(k).."];\n")
 	end
-	return dostring("return function(t) return {\n"..table.concat(rows, "").."} end\n")
+	return dostring("return function(t) return t and {\n"..table.concat(rows, "").."} or nil end\n")
 end
 
 local function _hash2tuple ( f )
@@ -79,7 +79,7 @@ local function _hash2tuple ( f )
 			table.insert(rows,"\th."..v.." or require'msgpack'.NULL\n")
 		end
 	end
-	return dostring("return function(h) return box.tuple.new({\n"..table.concat(rows, "").."}) end\n")
+	return dostring("return function(h) return h and box.tuple.new({\n"..table.concat(rows, "").."}) or nil end\n")
 end
 
 local function init_tuple_info(space_name, format)
