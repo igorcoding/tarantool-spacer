@@ -47,6 +47,7 @@ spacer.duplicate_space('space6', 'space1', {
 local log = require('log')
 local msgpack = require('msgpack')
 
+local spacer = {}
 local F = {}
 local T = {}
 
@@ -345,16 +346,30 @@ local function tuple_pack(t, f_info)
 	return box.tuple.new(tuple)
 end
 
+local function create_space_stub(new_space)
+	log.info("Skipping spacer create_space() action for '%s', because database in read only mode.", new_space)
+end
+
+local function duplicate_space_stub(new_space)
+	log.info("Skipping spacer duplicate_space() action for '%s', because database in read only mode.", new_space)
+end
+
 
 init_all_spaces_info()
 rawset(_G, 'F', F)
 rawset(_G, 'T', T)
 
-return {
-	F = F,
-	T = T,
-	create_space = create_space,
-	duplicate_space = duplicate_space,
-	tuple_unpack = tuple_unpack,
-	tuple_pack = tuple_pack,
-}
+spacer.F = F
+spacer.T = T
+spacer.tuple_pack = tuple_pack
+spacer.tuple_unpack = tuple_unpack
+
+if box.cfg.read_only then
+	spacer.create_space = create_space_stub
+	spacer.duplicate_space = duplicate_space_stub
+else
+	spacer.create_space = create_space
+	spacer.duplicate_space = duplicate_space
+end
+
+return spacer
