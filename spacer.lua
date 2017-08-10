@@ -347,11 +347,11 @@ local function tuple_pack(t, f_info)
 end
 
 local function create_space_stub(new_space)
-	log.info("Skipping spacer create_space action for '%s', because database in read only mode.", new_space)
+	log.info("Skipping spacer create_space() action for '%s', because database in read only mode.", new_space)
 end
 
 local function duplicate_space_stub(new_space)
-	log.info("Skipping spacer duplicate_space action for '%s', because database in read only mode.", new_space)
+	log.info("Skipping spacer duplicate_space() action for '%s', because database in read only mode.", new_space)
 end
 
 
