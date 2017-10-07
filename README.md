@@ -39,6 +39,11 @@ spacer.duplicate_space('space6', 'space1', {
         { name = 'status', type = 'tree', unique = false, parts = { 'status' } },
     }
 })
+
+-- vy_space1 will be identical to space1 (but in engine = 'vinyl')
+spacer.duplicate_space('vy_space1', 'space1', {
+    engine = 'vinyl'
+})
 ```
 
 
