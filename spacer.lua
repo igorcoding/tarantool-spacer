@@ -193,13 +193,17 @@ local function get_changed_opts_for_index(existing_index, ind_opts)
 	if ind_opts.parts == nil then
 		ind_opts.parts = { 1, 'NUM' }  -- default value when parts = nil
 	else
-		for i, part in pairs(existing_index.parts) do
-			local j = i * 2 - 1
-			local want_field_no = ind_opts.parts[j]
-			local want_field_type = ind_opts.parts[j + 1]
+		if #existing_index.parts ~= #ind_opts.parts / 2 then
+			parts_changed  = true
+		else
+			for i, part in ipairs(existing_index.parts) do
+				local j = i * 2 - 1
+				local want_field_no = ind_opts.parts[j]
+				local want_field_type = ind_opts.parts[j + 1]
 
-			if want_field_no ~= part.fieldno or string.lower(want_field_type) ~= string.lower(part.type) then
-				parts_changed = true
+				if want_field_no ~= part.fieldno or string.lower(want_field_type) ~= string.lower(part.type) then
+					parts_changed = true
+				end
 			end
 		end
 	end
@@ -245,7 +249,7 @@ local function init_indexes(space_name, indexes, keep_obsolete)
 
 			if ind.parts ~= nil then
 				ind_opts.parts = {}
-				for _, p in pairs(ind.parts) do
+				for _, p in ipairs(ind.parts) do
 					if F[name][p] ~= nil and F[name]['_'][p] ~= nil then
 						table.insert(ind_opts.parts, F[name][p])
 						table.insert(ind_opts.parts, F[name]['_'][p].type)
@@ -324,7 +328,7 @@ local function create_space(name, format, indexes, opts)
 	return sp
 end
 
-function duplicate_space(new_space, old_space, opts)
+local function duplicate_space(new_space, old_space, opts)
 	assert(new_space ~= nil, "Space name (new_space) cannot be null")
 	assert(old_space ~= nil, "Space name (old_space) cannot be null")
 	assert(box.space[old_space] ~= nil, "Space " .. old_space .. " does not exist")
