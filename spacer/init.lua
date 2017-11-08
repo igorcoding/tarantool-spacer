@@ -5,7 +5,7 @@ local log = require 'log'
 local inspect = require 'inspect'.inspect
 
 local fileio = require 'spacer.fileio'
-local space_migration = require 'spacer.space_migration'
+local space_migration = require 'spacer.migration'
 local util = require 'spacer.util'
 
 local NULL = require 'msgpack'.NULL
@@ -46,7 +46,10 @@ local function migrate_up(self, _n)
     local migrations = util.read_migrations(self.migrations_path, 'up', ver, n)
 
     if #migrations == 0 then
-        log.info('No migrations to apply. Last migration: %s_%s', inspect(ver), inspect(name))
+        if name == nil then
+            name = 'nil'
+        end
+        log.info('No migrations to apply. Last migration: %s_%s', inspect(ver), name)
         return
     end
 
@@ -130,8 +133,11 @@ end
 ---
 --- makemigration function
 ---
-local function makemigration(self, name)
+local function makemigration(self, name, autogenerate, nofile)
     assert(name ~= nil, 'Migration name is required')
+    if autogenerate == nil then
+        autogenerate = false
+    end
     local date = clock.time()
 
     local count = 0
@@ -143,18 +149,23 @@ local function makemigration(self, name)
         log.error('No spaces declared. Make sure to call spacer.space() function.')
         return
     end
-    local migration = space_migration.spaces_migration(__models__)
 
-    local requirements_body = table.concat(
-        fun.iter(migration.requirements):map(
-            function(key, r)
-                return string.format("local %s = require '%s'", r.name, key)
-            end):totable(),
-        '\n')
+    local requirements_body = ''
+    local up_body = ''
+    local down_body = ''
+    if autogenerate then
+        local migration = space_migration.spaces_migration(self, __models__)
+        requirements_body = table.concat(
+            fun.iter(migration.requirements):map(
+                function(key, r)
+                    return string.format("local %s = require '%s'", r.name, key)
+                end):totable(),
+            '\n')
 
-    local tab = string.rep(' ', 8)
-    local up_body = util.tabulate_string(table.concat(migration.up, '\n'), tab)
-    local down_body = util.tabulate_string(table.concat(migration.down, '\n'), tab)
+        local tab = string.rep(' ', 8)
+        up_body = util.tabulate_string(table.concat(migration.up, '\n'), tab)
+        down_body = util.tabulate_string(table.concat(migration.down, '\n'), tab)
+    end
 
     local migration_body = string.format([[--
 -- Migration "%s"
@@ -173,9 +184,15 @@ return {
 }
 ]], name, date, os.date('%x %X', date), requirements_body, up_body, down_body)
 
-    local path = fio.pathjoin(self.migrations_path, string.format('%d_%s.lua', date, name))
-    fileio.write_to_file(path, migration_body)
+    if not nofile then
+        local path = fio.pathjoin(self.migrations_path, string.format('%d_%s.lua', date, name))
+        fileio.write_to_file(path, migration_body)
+    end
     return migration_body
+end
+
+local function _clear_schema(self)
+    box.space._schema:delete({SCHEMA_KEY})
 end
 
 local M
@@ -186,16 +203,58 @@ else
         migrations_path = NULL,
         __models__ = __models__,
     },{
-        __call = function(M, migrations_path)
-            assert(fileio.exists(migrations_path), string.format("Migrations path '%s' does not exist", migrations_path))
-            M.migrations_path = migrations_path
+        __call = function(M, user_opts)
+
+            local valid_options = {
+                migrations = {
+                    required = true
+                },
+            }
+
+            local opts = {}
+            local invalid_options = {}
+            -- check user provided options
+            for key, value in pairs(user_opts) do
+                local opt_info = valid_options[key]
+                if opt_info == nil then
+                    table.insert(invalid_options, key)
+                else
+                    if opt_info.required and value == nil then
+                        error(string.format('Option "%s" is required', key))
+                    elseif value == nil then
+                        opts[key] = opt_info.default
+                    else
+                        opts[key] = value
+                    end
+                end
+            end
+
+            if #invalid_options > 0 then
+                error(string.format('Unknown options provided: [%s]', table.concat(invalid_options, ', ')))
+            end
+
+            -- check that user provided all required options
+            for valid_key, opt_info in pairs(valid_options) do
+                local value = user_opts[valid_key]
+                if opt_info.required and value == nil then
+                    error(string.format('Option "%s" is required', valid_key))
+                elseif user_opts[valid_key] == nil then
+                    opts[valid_key] = opt_info.default
+                else
+                    opts[valid_key] = value
+                end
+            end
+
+            assert(fileio.exists(opts.migrations), string.format("Migrations path '%s' does not exist", opts.migrations))
+            M.migrations_path = opts.migrations
             return M
         end,
         __index = {
             space = space,
             migrate_up = migrate_up,
             migrate_down = migrate_down,
-            makemigration = makemigration
+            makemigration = makemigration,
+            _clear_schema = _clear_schema,
         }
     })
     rawset(_G, '__spacer__', M)

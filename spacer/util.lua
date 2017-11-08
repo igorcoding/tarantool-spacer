@@ -3,6 +3,16 @@ local fun = require 'fun'
 local fileio = require 'spacer.fileio'
 
 
+local function make_mixin(src, mixin)
+	for k, v in pairs(src) do
+        if mixin[k] == nil then
+            print(k, v)
+            mixin[k] = v
+        end
+	end
+	return mixin
+end
+
 local function string_split(inputstr, sep)
     if sep == nil then
         sep = "%s"
@@ -84,6 +94,7 @@ end
 
 
 return {
+    make_mixin = make_mixin,
     string_split = string_split,
     tabulate_string = tabulate_string,
     read_migrations = read_migrations,
