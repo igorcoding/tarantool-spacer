@@ -6,7 +6,7 @@ local ops = require 'spacer.ops'
 local function generate_field_info(space_format)
     local f = {}
     local f_extra = {}
-	for k, v in pairs(space_format) do
+	for k, v in ipairs(space_format) do
 		f[v.name] = k
 		f_extra[v.name] = {
 			fieldno = k,
@@ -407,5 +407,6 @@ local function spaces_migration(spacer, spaces_decl)
 end
 
 return {
+    generate_field_info = generate_field_info,
     spaces_migration = spaces_migration
 }

@@ -7,11 +7,27 @@ local inspect = require 'inspect'.inspect
 local fileio = require 'spacer.fileio'
 local space_migration = require 'spacer.migration'
 local util = require 'spacer.util'
+local transformations = require 'spacer.transformations'
 
 local NULL = require 'msgpack'.NULL
 
 local SCHEMA_KEY = '_spacer_ver'
 local __models__ = {}
+local F = {}
+local F_FULL = {}
+local T = {}
+
+
+local function init_fields_and_transform(space_name, format)
+    local f, f_extra = space_migration.generate_field_info(format)
+    F[space_name] = f
+    F_FULL[space_name] = f_extra
+    T[space_name] = {}
+    T[space_name].dict = transformations.tuple2hash(f)
+	T[space_name].tuple = transformations.hash2tuple(f)
+    T[space_name].hash = T[space_name].dict  -- alias
+end
+
 
 local function space(self, name, format, indexes, opts)
     assert(name ~= nil, "Space name cannot be null")
@@ -24,6 +40,7 @@ local function space(self, name, format, indexes, opts)
         space_indexes = indexes,
         space_opts = opts,
     }
+    init_fields_and_transform(name, format)
 end
 
 
@@ -202,12 +219,18 @@ else
     M = setmetatable({
         migrations_path = NULL,
         __models__ = __models__,
+        F = F,
+        F_FULL = F_FULL,
+        T = T,
     },{
         __call = function(M, user_opts)
-
             local valid_options = {
                 migrations = {
                     required = true
+                },
+                global_ft = {
+                    required = false,
+                    default = true,
                 },
             }
 
@@ -247,6 +270,19 @@ else
 
             assert(fileio.exists(opts.migrations), string.format("Migrations path '%s' does not exist", opts.migrations))
             M.migrations_path = opts.migrations
+
+            -- initialize current spaces fields and transformations
+            local spaces = box.space._vspace:select{}
+            for _, sp in ipairs(spaces) do
+                init_fields_and_transform(sp[3], sp[7])
+            end
+
+            if opts.global_ft then
+                rawset(_G, 'F', F)
+                rawset(_G, 'F_FULL', F_FULL)
+                rawset(_G, 'T', T)
+            end
+
             return M
         end,
         __index = {
