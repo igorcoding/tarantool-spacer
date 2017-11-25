@@ -22,6 +22,7 @@ build = {
         ['spacer.ops'] = 'spacer/ops.lua',
         ['spacer.fileio'] = 'spacer/fileio.lua',
         ['spacer.util'] = 'spacer/util.lua',
+        ['spacer.transformations'] = 'spacer/transformations.lua',
     }
 }
 
