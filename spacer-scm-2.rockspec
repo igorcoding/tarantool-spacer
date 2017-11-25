@@ -12,7 +12,6 @@ description = {
 dependencies = {
     'lua >= 5.1',
     'inspect >= 3.1.0-1',
-    'moonwalker'
 }
 build = {
     type = 'builtin',
