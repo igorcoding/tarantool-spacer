@@ -1,6 +1,9 @@
-local inspect = require 'inspect'.inspect
 local msgpack = require 'msgpack'
+
+local compat = require 'spacer.compat'
+local inspect = require 'spacer.myinspect'
 local ops = require 'spacer.ops'
+local stmt_obj = require 'spacer.stmt'
 
 
 local function generate_field_info(space_format)
@@ -8,9 +11,17 @@ local function generate_field_info(space_format)
     local f_extra = {}
 	for k, v in ipairs(space_format) do
 		f[v.name] = k
+
+        local is_nullable = v.is_nullable
+        if is_nullable == nil then
+            is_nullable = false
+        end
+
 		f_extra[v.name] = {
 			fieldno = k,
-			type = v.type
+			type = v.type,
+            is_nullable = is_nullable,
+            collation = v.collation,
 		}
 	end
 	return f, f_extra
@@ -21,6 +32,11 @@ local function get_changed_opts_for_index(spacer, space_name, existing_index, in
 	if existing_index == nil or ind_opts == nil then
 		return nil
 	end
+
+    local space_tuple = box.space._vspace.index.name:get({space_name})
+    assert(space_tuple ~= nil, string.format('Space "%s" not found', space_name))
+    local index_tuple = box.space._vindex:get({space_tuple[1], existing_index.id})
+    assert(index_tuple ~= nil, string.format('Index #%d not found in space "%s"', existing_index.id, space_name))
 
 	local opts_up = {}
 	local opts_down = {}
@@ -111,47 +127,30 @@ local function get_changed_opts_for_index(spacer, space_name, existing_index, in
 	end
 
 	local parts_changed = false
-    local old_parts
-	if ind_opts.parts == nil then
-		ind_opts.parts = { 1, 'NUM' }  -- default value when parts = nil
-	end
-    local space_tuple = box.space._vspace.index.name:get({space_name})
-    assert(space_tuple ~= nil, string.format('Space "%s" not found', space_name))
-    local index_tuple = box.space._vindex:get({space_tuple[1], existing_index.id})
-    assert(index_tuple ~= nil, string.format('Index #%d not found in space "%s"', existing_index.id, space_name))
-    index_tuple = index_tuple:totable()
-    local existing_index_parts = index_tuple[6]
+    assert(ind_opts.parts ~= nil, 'index parts must not be nil')
+    local old_parts = compat.normalize_index_tuple_format(index_tuple[6])
+    local new_parts = compat.normalize_index_tuple_format(ind_opts.parts)
 
-    print(#existing_index_parts, #ind_opts.parts)
-    if #existing_index.parts ~= #ind_opts.parts / 2 then
-        print('hello')
-        parts_changed  = true
-        old_parts = {}
-        for _, part in ipairs(existing_index.parts) do
-            table.insert(old_parts, {part.fieldno, part.type})
-        end
+    if #old_parts ~= #new_parts then
+        parts_changed = true
     else
-        for i, part in ipairs(existing_index.parts) do
-            local j = i * 2 - 1
-            local has_field_no = part.fieldno
-            local has_field_type = part.type
+        for i, _ in ipairs(old_parts) do
+            local old_part = old_parts[i]
+            local new_part = new_parts[i]
 
-            local want_field_no = ind_opts.parts[j]
-            local want_field_type = ind_opts.parts[j + 1]
-
-            if want_field_no ~= has_field_no or string.lower(want_field_type) ~= string.lower(has_field_type) then
-                parts_changed = true
-                if old_parts == nil then
-                    old_parts = {}
+            for k, _ in pairs(old_part) do
+                -- check all keys (fieldno, type, is_nullable, collation, ...)
+                if old_part[k] ~= new_part[k] then
+                    parts_changed = true
+                    break
                 end
-                table.insert(old_parts, {has_field_no, has_field_type})
             end
         end
     end
 
 	if parts_changed then
-		opts_up.parts = ind_opts.parts
-        opts_down.parts = old_parts
+		opts_up.parts = compat.index_parts_from_normalized(new_parts)
+        opts_down.parts = compat.index_parts_from_normalized(old_parts)
 		changed_opts_count = changed_opts_count + 1
 	end
 
@@ -163,7 +162,49 @@ local function get_changed_opts_for_index(spacer, space_name, existing_index, in
 end
 
 
+local function build_opts_for_index(spacer, space_name, index_id)
+    local sp = box.space[space_name]
+    if sp == nil then
+        return nil
+    end
+
+    local ind = sp.index[index_id]
+    if ind == nil then
+        return nil
+    end
+
+    local raw_index_options = box.space._index:get({sp.id, ind.id})
+    if raw_index_options == nil then
+        return nil
+    end
+    raw_index_options = raw_index_options[5]
+
+    local index_opts = {}
+
+    index_opts.type = ind.type
+    index_opts.unique = ind.unique
+    index_opts.distance = raw_index_options.distance
+    index_opts.dimension = raw_index_options.dimension
+    if ind.sequence_id ~= nil then
+        index_opts.sequence = true
+    end
+
+    index_opts.parts = {}
+    for _, p in ipairs(ind.parts) do
+        local part = {p.fieldno, p.type}
+        part.is_nullable = p.is_nullable
+        part.collation = p.collation
+
+        table.insert(index_opts.parts, part)
+    end
+
+    return index_opts
+end
+
+
 local function indexes_migration(spacer, stmt, space_name, indexes, f, f_extra)
+    local created_indexes = {}
+
     for _, ind in ipairs(indexes) do
         assert(ind.name ~= nil, string.format("Index name cannot be null (space '%s')", space_name))
 
@@ -185,15 +226,7 @@ local function indexes_migration(spacer, stmt, space_name, indexes, f, f_extra)
         end
 
         if ind.parts ~= nil then
-            ind_opts.parts = {}
-            for _, p in ipairs(ind.parts) do
-                if f[p] ~= nil and f_extra[p] ~= nil then
-                    table.insert(ind_opts.parts, f[p])
-                    table.insert(ind_opts.parts, f_extra[p].type)
-                else
-                    error(string.format("Field %s.%s not found", space_name, p))
-                end
-            end
+            ind_opts.parts = compat.index_parts_from_fields(space_name, ind.parts, f_extra)
         end
 
         local sp = box.space[space_name]
@@ -214,7 +247,46 @@ local function indexes_migration(spacer, stmt, space_name, indexes, f, f_extra)
                 stmt:down('box.space.%s.index.%s:alter(%s)', space_name, ind.name, inspect(opts_down))
             end
         end
+
+        created_indexes[ind.name] = true
     end
+
+    -- check obsolete indexes in space
+	if not spacer.keep_obsolete_indexes then
+        local sp = box.space[space_name]
+        if sp ~= nil then
+            local sp_indexes = box.space._index:select({sp.id})
+            local primary_index_name
+            for _,ind in ipairs(sp_indexes) do
+                -- finding primary index
+                ind = {id = ind[spacer.F._index.iid], name = ind[spacer.F._index.name]}
+                if ind.id == 0 then
+                    primary_index_name = ind.name
+                end
+            end
+
+            if not created_indexes[primary_index_name] then
+                -- primary index recreation must be first
+                local ind_opts = build_opts_for_index(spacer, space_name, 0)
+                stmt:down('box.space.%s:create_index(%s, %s)', space_name, inspect(primary_index_name), inspect(ind_opts))
+            end
+
+            for _,ind in ipairs(sp_indexes) do
+                ind = {id = ind[spacer.F._index.iid], name = ind[spacer.F._index.name]}
+
+                if ind.id ~= 0 and not created_indexes[ind.name] then
+                    local ind_opts = build_opts_for_index(spacer, space_name, ind.id)
+                    stmt:up('box.space.%s.index.%s:drop()', space_name, ind.name)
+                    stmt:down('box.space.%s:create_index(%s, %s)', space_name, inspect(ind.name), inspect(ind_opts))
+                end
+            end
+
+            if not created_indexes[primary_index_name] then
+                -- primary index drop must be last
+                stmt:up('box.space.%s.index.%s:drop()', space_name, primary_index_name)
+            end
+        end
+	end
 end
 
 
@@ -232,26 +304,43 @@ local function find_format_changes(spacer, existing_format, new_format)
 
         if old_field.type == new_field.type and old_field.name ~= new_field.name then
             -- field rename
-            error('Field renames are not supported yet')
+            error([[Seems like you are trying to rename field.
+            It is illegal in automatic migrations.
+            Either write a migration with new format scheme
+            or add new fields at the bottom of format list]])
         end
 
         if old_field.type ~= new_field.type and old_field.name == new_field.name then
             error('Field type changes are not supported yet')
         end
+
+        if old_field.is_nullable ~= new_field.is_nullable
+                or old_field.collation ~= new_field.collation then
+            table.insert(changes, {
+                type = 'alter',
+                fieldno = fieldno,
+                field_name = new_field.name,
+                field_type = new_field.type,
+                is_nullable = new_field.is_nullable,
+                collation = new_field.collation,
+            })
+        end
     end
 
-    if #new_format == #existing_format then
-        return {}
-    elseif #new_format < #existing_format then
-        error('Fornat field removal is not supported yet')
+    if #new_format < #existing_format then
+        error('Format field removal is not supported yet')
     end
 
     for fieldno = #existing_format + 1, #new_format do
+        local new_field = new_format[fieldno]
+
         table.insert(changes, {
             type = 'new',
             fieldno = fieldno,
-            field_name = new_format[fieldno].name,
-            field_type = new_format[fieldno].type,
+            field_name = new_field.name,
+            field_type = new_field.type,
+            is_nullable = new_field.is_nullable,
+            collation = new_field.collation,
         })
     end
 
@@ -264,92 +353,33 @@ local function run_format_changes(spacer, stmt, space_name, format_changes)
     assert(index0 ~= nil, string.format('Index #0 not found in space %s', space_name))
 
     local updates = {}
+    local has_new_changes = false
     for _, ch in ipairs(format_changes) do
         if ch.type == 'new' then
             table.insert(updates, {'=', ch.fieldno, ops.get_default_for_type(ch.field_type)})
+            has_new_changes = true
         end
     end
 
-    stmt:requires('moonwalker')
-    stmt:requires('spacer.ops', 'ops')
-    stmt:up([[moonwalker {
+    if #updates > 0 then
+        stmt:requires('moonwalker')
+        stmt:requires('spacer.ops', 'ops')
+        stmt:up([[moonwalker {
     space = box.space.%s,
     actor = function(t)
         local key = ops.index_key(%s, 0, t)
         box.space.%s:update(key, %s)
     end,
 }]], space_name, inspect(space_name), space_name, inspect(updates))
-    stmt:down('assert(false, "Need to write explicitly a down migration for field removal")')
+    end
+
+    if has_new_changes then
+        stmt:down('assert(false, "Need to write explicitly a down migration for field removal")')
+    end
 end
 
 local function spaces_migration(spacer, spaces_decl)
-    local _stmt = {
-        _only_up = false,
-        up_in_transaction = false,
-        down_in_transaction = false,
-        requirements = {},
-        statements_up = {},
-        statements_down = {},
-    }
-    local stmt_methods = {
-        requires = function(self, req, name)
-            self.requirements[req] = {
-                name = name or req
-            }
-        end,
-        only_up = function(self, only_up)
-            if only_up == nil then
-                only_up = true
-            end
-            self._only_up = only_up
-        end,
-        up = function(self, f, ...)
-            table.insert(self.statements_up, string.format(f, ...))
-        end,
-        down = function(self, f, ...)
-            if self._only_up then return end
-            table.insert(self.statements_down, string.format(f, ...))
-        end,
-        up_tx_begin = function(self)
-            if self.up_in_transaction then
-                return
-            end
-
-            -- Space _space does not support multi-statement transactions
-            --self:up('box.begin()')
-            self.up_in_transaction = true
-        end,
-        up_tx_commit = function(self)
-            if not self.up_in_transaction then
-                return
-            end
-
-            -- Space _space does not support multi-statement transactions
-            --self:up('box.commit()')
-            self.up_in_transaction = false
-        end,
-        down_tx_begin = function(self)
-            if self._only_up then return end
-            if self.up_in_transaction then
-                return
-            end
-
-            -- Space _space does not support multi-statement transactions
-            --self:down('box.begin()')
-            self.down_in_transaction = true
-        end,
-        down_tx_commit = function(self)
-            if self._only_up then return end
-            if not self.down_in_transaction then
-                return
-            end
-
-            -- Space _space does not support multi-statement transactions
-            --self:down('box.commit()')
-            self.down_in_transaction = false
-        end
-    }
-    local stmt = setmetatable(_stmt, {__index = stmt_methods})
+    local stmt = stmt_obj.new()
 
     for _, space_decl in pairs(spaces_decl) do
         local space_name = space_decl.space_name
@@ -384,11 +414,15 @@ local function spaces_migration(spacer, spaces_decl)
             assert(sp_tuple ~= nil, string.format("Couldn't find space %s in _vspace", space_name))
             local existing_format = sp_tuple[7]
             local format_changes = find_format_changes(spacer, existing_format, space_format)
+
             stmt:up_tx_begin()
             stmt:down_tx_begin()
             if #format_changes > 0 then
+                stmt:up('box.space.%s:format({})', space_name)  -- clear format
+                stmt:down('box.space.%s:format({})', space_name)  -- clear format
                 run_format_changes(spacer, stmt, space_name, format_changes)
-                stmt:up('box.space.%s:format(%s)', space_name, inspect(space_format))
+                stmt:up_last('box.space.%s:format(%s)', space_name, inspect(space_format))
+                stmt:down_last('box.space.%s:format(%s)', space_name, inspect(existing_format))
             end
 
             local f, f_extra = generate_field_info(space_format)
@@ -401,8 +435,8 @@ local function spaces_migration(spacer, spaces_decl)
 
     return {
         requirements = stmt.requirements,
-        up = stmt.statements_up,
-        down = stmt.statements_down
+        up = stmt:build_up(),
+        down = stmt:build_down()
     }
 end
 

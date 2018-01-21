@@ -2,9 +2,9 @@ local clock = require 'clock'
 local fio = require 'fio'
 local fun = require 'fun'
 local log = require 'log'
-local inspect = require 'inspect'.inspect
 
 local fileio = require 'spacer.fileio'
+local inspect = require 'spacer.myinspect'
 local space_migration = require 'spacer.migration'
 local util = require 'spacer.util'
 local transformations = require 'spacer.transformations'
@@ -41,8 +41,39 @@ local function space(self, name, format, indexes, opts)
         space_opts = opts,
     }
     init_fields_and_transform(name, format)
+
+    if self.automigrate then
+        local m = self:_makemigration('automigration', true, true)
+        local compiled_code, err, ok
+
+        compiled_code, err = loadstring(m)
+        if compiled_code == nil then
+            error(string.format('Cannot automigrate due to error: %s', err))
+            return
+        end
+
+        ok, err = self:_migrate_one_up(compiled_code)
+        if not ok then
+            error(string.format('Error while applying migration: %s', err))
+        end
+    end
 end
 
+
+---
+--- _migrate_one_up function
+---
+local function _migrate_one_up(self, migration)
+    setfenv(migration, _G)
+    local funcs = migration()
+    assert(funcs ~= nil, 'Migration file should return { up = function() ... end, down = function() ... end } table')
+    assert(funcs.up ~= nil, 'up function is required')
+    local ok, err = pcall(funcs.up)
+    if not ok then
+        return false, err
+    end
+    return true, nil
+end
 
 ---
 --- migrate_up function
@@ -71,11 +102,7 @@ local function migrate_up(self, _n)
     end
 
     for _, m in ipairs(migrations) do
-        setfenv(m.migration, _G)
-        local funcs = m.migration()
-        assert(funcs ~= nil, 'Migration file should return { up = function() ... end, down = function() ... end } table')
-        assert(funcs.up ~= nil, 'up function is required')
-        local ok, err = pcall(funcs.up)
+        local ok, err = self:_migrate_one_up(m.migration)
         if not ok then
             log.error('Error running migration %s: %s', m.filename, err)
             return false
@@ -88,6 +115,21 @@ local function migrate_up(self, _n)
     return true
 end
 
+
+---
+--- _migrate_one_down function
+---
+local function _migrate_one_down(self, migration)
+    setfenv(migration, _G)
+    local funcs = migration()
+    assert(funcs ~= nil, 'Migration file should return { up = function() ... end, down = function() ... end } table')
+    assert(funcs.down ~= nil, 'down function is required')
+    local ok, err = pcall(funcs.down)
+    if not ok then
+        return false, err
+    end
+    return true, nil
+end
 
 ---
 --- migrate_down function
@@ -120,11 +162,7 @@ local function migrate_down(self, _n)
     end
 
     for i, m in ipairs(migrations) do
-        setfenv(m.migration, _G)
-        local funcs = m.migration()
-        assert(funcs ~= nil, 'Migration file should return { up = function() ... end, down = function() ... end } table')
-        assert(funcs.down ~= nil, 'down function is required')
-        local ok, err = pcall(funcs.down)
+        local ok, err = self:_migrate_one_down(m.migration)
         if not ok then
             log.error('Error running migration %s: %s', m.filename, err)
             return false
@@ -150,7 +188,7 @@ end
 ---
 --- makemigration function
 ---
-local function makemigration(self, name, autogenerate, nofile)
+local function _makemigration(self, name, autogenerate, nofile)
     assert(name ~= nil, 'Migration name is required')
     if autogenerate == nil then
         autogenerate = false
@@ -207,6 +245,7 @@ return {
     end
     return migration_body
 end
+local function makemigration(self, ...) self:_makemigration(...) end
 
 local function _clear_schema(self)
     box.space._schema:delete({SCHEMA_KEY})
@@ -218,6 +257,8 @@ if rawget(_G,'__spacer__') then
 else
     M = setmetatable({
         migrations_path = NULL,
+        automigrate = NULL,
+        keep_obsolete_indexes = NULL,
         __models__ = __models__,
         F = F,
         F_FULL = F_FULL,
@@ -226,11 +267,20 @@ else
         __call = function(M, user_opts)
             local valid_options = {
                 migrations = {
-                    required = true
+                    required = true,
+                    M_name = 'migrations_path'
                 },
                 global_ft = {
                     required = false,
                     default = true,
+                },
+                automigrate = {
+                    required = false,
+                    default = false,
+                },
+                keep_obsolete_indexes = {
+                    required = false,
+                    default = false,
                 },
             }
 
@@ -269,7 +319,14 @@ else
             end
 
             assert(fileio.exists(opts.migrations), string.format("Migrations path '%s' does not exist", opts.migrations))
-            M.migrations_path = opts.migrations
+
+            for valid_key, opt_info in pairs(valid_options) do
+                if opt_info.M_name == nil then
+                    opt_info.M_name = valid_key
+                end
+
+                M[opt_info.M_name] = opts[valid_key]
+            end
 
             -- initialize current spaces fields and transformations
             local spaces = box.space._vspace:select{}
@@ -286,11 +343,15 @@ else
             return M
         end,
         __index = {
+            _migrate_one_up = _migrate_one_up,
+            _migrate_one_down = _migrate_one_down,
+            _makemigration = _makemigration,
+            _clear_schema = _clear_schema,
+
             space = space,
             migrate_up = migrate_up,
             migrate_down = migrate_down,
             makemigration = makemigration,
-            _clear_schema = _clear_schema,
         }
     })
     rawset(_G, '__spacer__', M)

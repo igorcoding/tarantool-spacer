@@ -3,10 +3,17 @@ local fun = require 'fun'
 local fileio = require 'spacer.fileio'
 
 
+local function copy_table(src)
+    local t = {}
+	for k, v in pairs(src) do
+        t[k] = v
+	end
+	return t
+end
+
 local function make_mixin(src, mixin)
 	for k, v in pairs(src) do
         if mixin[k] == nil then
-            print(k, v)
             mixin[k] = v
         end
 	end
@@ -47,6 +54,10 @@ local function reverse_table(tbl)
   end
 end
 
+
+local function compile_migration(data)
+    return loadstring(data)
+end
 
 local function read_migrations(path, direction, from_migration, n)
     local migrations = {}
@@ -94,6 +105,7 @@ end
 
 
 return {
+    copy_table = copy_table,
     make_mixin = make_mixin,
     string_split = string_split,
     tabulate_string = tabulate_string,

@@ -17,11 +17,14 @@ build = {
     type = 'builtin',
     modules = {
         ['spacer.init'] = 'spacer/init.lua',
-        ['spacer.migration'] = 'spacer/migration.lua',
-        ['spacer.ops'] = 'spacer/ops.lua',
+        ['spacer.compat'] = 'spacer/compat.lua',
         ['spacer.fileio'] = 'spacer/fileio.lua',
-        ['spacer.util'] = 'spacer/util.lua',
+        ['spacer.migration'] = 'spacer/migration.lua',
+        ['spacer.myinspect'] = 'spacer/myinspect.lua',
+        ['spacer.ops'] = 'spacer/ops.lua',
+        ['spacer.stmt'] = 'spacer/stmt.lua',
         ['spacer.transformations'] = 'spacer/transformations.lua',
+        ['spacer.util'] = 'spacer/util.lua',
     }
 }
 
