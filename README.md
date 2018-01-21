@@ -153,3 +153,58 @@ box.spacer:migrate_down(n)
 
 It accepts `n` - number of migrations to rollback (by default `n` is 1, i.e. roll back obly the latest migration).
 To rollback all migration just pass any huge number.
+
+
+# Fields
+
+Space fields can be accessed by the global variable `F`, which is set by spacer 
+or in the spacer directly (`box.spacer.F`):
+
+```lua
+box.space.space1:update(
+    {1},
+    {
+        {'=', F.object.name, 'John Watson'},
+    }
+)
+```
+
+
+# Transformations
+
+You can easily transform a given tuple to a dictionary-like object and vice-a-versa.
+
+These are the functions:
+* `T.space_name.dict` or `T.space_name.hash` - transforms a tuple to a dictionary
+* `T.space_name.tuple` - transforms a dictionary back to a tuple
+
+T can be accessed through the global variable `T` or in the spacer directly (`box.spacer.T`)
+
+```lua
+local john = box.space.object:get({1})
+local john_dict = T.object.dict(john) -- or T.object.hash(john)
+--[[
+john_dict = {
+    id = 1,
+    name = 'John Watson',
+    ...
+}
+--]]
+
+```
+
+... or vice-a-versa:
+
+```lua
+local john_dict = {
+    id = 1,
+    name = 'John Watson',
+    -- ...
+}
+
+local john = T.object.tuple(john_dict)
+--[[
+john = [1, 'John Watson', ...]
+--]]
+
+```
