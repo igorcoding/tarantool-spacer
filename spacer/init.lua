@@ -318,7 +318,12 @@ else
                 end
             end
 
-            assert(fileio.exists(opts.migrations), string.format("Migrations path '%s' does not exist", opts.migrations))
+            if not fileio.exists(opts.migrations) then
+                if not fio.mkdir(opts.migrations) then
+                    local e = errno()
+                    error(string.format("Couldn't create migrations dir '%s': %d/%s", opts.migrations, e, errno.strerror(e)))
+                end
+            end
 
             for valid_key, opt_info in pairs(valid_options) do
                 if opt_info.M_name == nil then
