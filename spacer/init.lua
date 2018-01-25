@@ -191,7 +191,7 @@ end
 local function _makemigration(self, name, autogenerate, nofile)
     assert(name ~= nil, 'Migration name is required')
     if autogenerate == nil then
-        autogenerate = false
+        autogenerate = true
     end
     local date = clock.time()
 
