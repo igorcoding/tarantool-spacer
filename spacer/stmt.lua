@@ -17,6 +17,23 @@ local stmt_methods = {
         if self._only_up then return end
         table.insert(self.statements_down, string.format(f, ...))
     end,
+    up_apply = function(self, statements)
+        if statements == nil then return end
+
+        for _, s in ipairs(statements) do
+            local f = table.remove(s, 1)
+            self:up(f, unpack(s))
+        end
+    end,
+    down_apply = function(self, statements)
+        if self._only_up then return end
+        if statements == nil then return end
+
+        for _, s in ipairs(statements) do
+            local f = table.remove(s, 1)
+            self:down(f, unpack(s))
+        end
+    end,
     up_last = function(self, f, ...)
         -- insert in fifo order
         table.insert(self.statements_up_last, string.format(f, ...))

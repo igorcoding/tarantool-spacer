@@ -5,19 +5,19 @@ local fileio = require 'spacer.fileio'
 
 local function copy_table(src)
     local t = {}
-	for k, v in pairs(src) do
+    for k, v in pairs(src) do
         t[k] = v
-	end
-	return t
+    end
+    return t
 end
 
 local function make_mixin(src, mixin)
-	for k, v in pairs(src) do
+    for k, v in pairs(src) do
         if mixin[k] == nil then
             mixin[k] = v
         end
-	end
-	return mixin
+    end
+    return mixin
 end
 
 local function string_split(inputstr, sep)
@@ -103,6 +103,10 @@ local function read_migrations(path, direction, from_migration, n)
     return migrations
 end
 
+local function string_starts(String,Start)
+    return string.sub(String,1,string.len(Start))==Start
+ end
+
 
 return {
     copy_table = copy_table,
@@ -110,4 +114,5 @@ return {
     string_split = string_split,
     tabulate_string = tabulate_string,
     read_migrations = read_migrations,
+    string_starts = string_starts,
 }

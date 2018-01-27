@@ -1,11 +1,10 @@
 # spacer
-Tarantool Spacer. Automatic model migrations.
+Tarantool Spacer. Automatic models migrations.
 
 # Changes detected by spacer
 
-* Space creation
-* Index creation
-* Index deletion
+* Space create and drop
+* Index create and drop
 * Index options alteration
     * `unique`
     * `type`

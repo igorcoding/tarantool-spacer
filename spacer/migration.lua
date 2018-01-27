@@ -4,129 +4,130 @@ local compat = require 'spacer.compat'
 local inspect = require 'spacer.myinspect'
 local ops = require 'spacer.ops'
 local stmt_obj = require 'spacer.stmt'
+local util = require 'spacer.util'
 
 
 local function generate_field_info(space_format)
     local f = {}
     local f_extra = {}
-	for k, v in ipairs(space_format) do
-		f[v.name] = k
+    for k, v in ipairs(space_format) do
+        f[v.name] = k
 
         local is_nullable = v.is_nullable
         if is_nullable == nil then
             is_nullable = false
         end
 
-		f_extra[v.name] = {
-			fieldno = k,
-			type = v.type,
+        f_extra[v.name] = {
+            fieldno = k,
+            type = v.type,
             is_nullable = is_nullable,
             collation = v.collation,
-		}
-	end
-	return f, f_extra
+        }
+    end
+    return f, f_extra
 end
 
 
 local function get_changed_opts_for_index(spacer, space_name, existing_index, ind_opts)
-	if existing_index == nil or ind_opts == nil then
-		return nil
-	end
+    if existing_index == nil or ind_opts == nil then
+        return nil
+    end
 
     local space_tuple = box.space._vspace.index.name:get({space_name})
     assert(space_tuple ~= nil, string.format('Space "%s" not found', space_name))
     local index_tuple = box.space._vindex:get({space_tuple[1], existing_index.id})
     assert(index_tuple ~= nil, string.format('Index #%d not found in space "%s"', existing_index.id, space_name))
 
-	local opts_up = {}
-	local opts_down = {}
+    local opts_up = {}
+    local opts_down = {}
 
-	local changed_opts_count = 0
+    local changed_opts_count = 0
 
-	if ind_opts.unique == nil then
-		ind_opts.unique = true  -- default value of unique
-	end
+    if ind_opts.unique == nil then
+        ind_opts.unique = true  -- default value of unique
+    end
 
-	local index_type = string.lower(existing_index.type)
-	if index_type ~= 'bitset' and index_type ~= 'rtree' and existing_index.unique ~= ind_opts.unique then
-		opts_up.unique = ind_opts.unique
+    local index_type = string.lower(existing_index.type)
+    if index_type ~= 'bitset' and index_type ~= 'rtree' and existing_index.unique ~= ind_opts.unique then
+        opts_up.unique = ind_opts.unique
         opts_down.unique = existing_index.unique
-		changed_opts_count = changed_opts_count + 1
-	end
+        changed_opts_count = changed_opts_count + 1
+    end
 
-	if index_type ~= string.lower(ind_opts.type) then
-		opts_up.type = ind_opts.type
-		opts_down.type = index_type
-		changed_opts_count = changed_opts_count + 1
-	end
+    if index_type ~= string.lower(ind_opts.type) then
+        opts_up.type = ind_opts.type
+        opts_down.type = index_type
+        changed_opts_count = changed_opts_count + 1
+    end
 
-	if true then  -- check sequence changes
-		local existing_seq
-		local seq_changed = false
+    if true then  -- check sequence changes
+        local existing_seq
+        local seq_changed = false
 
         local fld_sequence_name = 3
         local old_sequence_value
 
-		if existing_index.sequence_id ~= nil then
-			-- check if some sequence actually exist
-			existing_seq = box.space._sequence:get({existing_index.sequence_id})
-		end
+        if existing_index.sequence_id ~= nil then
+            -- check if some sequence actually exist
+            existing_seq = box.space._sequence:get({existing_index.sequence_id})
+        end
 
-		if type(ind_opts.sequence) == 'boolean' then
-			-- user specified just 'true' or 'false' as sequence, so any sequence is ok
-			if ind_opts.sequence == true and existing_seq == nil then
-				seq_changed = true
+        if type(ind_opts.sequence) == 'boolean' then
+            -- user specified just 'true' or 'false' as sequence, so any sequence is ok
+            if ind_opts.sequence == true and existing_seq == nil then
+                seq_changed = true
                 old_sequence_value = msgpack.NULL
-			elseif ind_opts.sequence == false and existing_seq ~= nil then
-				seq_changed = true
+            elseif ind_opts.sequence == false and existing_seq ~= nil then
+                seq_changed = true
                 old_sequence_value = existing_seq[fld_sequence_name]
-			end
-		elseif ind_opts.sequence == nil then
-			-- changed to not using sequence
-			if existing_seq ~= nil then
-				seq_changed = true
+            end
+        elseif ind_opts.sequence == nil then
+            -- changed to not using sequence
+            if existing_seq ~= nil then
+                seq_changed = true
                 old_sequence_value = existing_seq[fld_sequence_name]
-			end
-		elseif type(ind_opts.sequence) == 'string' then
-			if existing_seq == nil or existing_seq[fld_sequence_name] ~= ind_opts.sequence then
-				seq_changed = true
+            end
+        elseif type(ind_opts.sequence) == 'string' then
+            if existing_seq == nil or existing_seq[fld_sequence_name] ~= ind_opts.sequence then
+                seq_changed = true
                 old_sequence_value = existing_seq[fld_sequence_name]
-			end
-		else
-			seq_changed = true
+            end
+        else
+            seq_changed = true
             old_sequence_value = existing_seq[fld_sequence_name]
-		end
+        end
 
-		if seq_changed then
-			opts_up.sequence = ind_opts.sequence
+        if seq_changed then
+            opts_up.sequence = ind_opts.sequence
             opts_down.sequence = old_sequence_value
-			changed_opts_count = changed_opts_count + 1
-		end
-	end
+            changed_opts_count = changed_opts_count + 1
+        end
+    end
 
-	if ind_opts.type == 'rtree' then
-		if ind_opts.dimension == nil then
-			ind_opts.dimension = 2  -- default value for dimension
-		end
+    if ind_opts.type == 'rtree' then
+        if ind_opts.dimension == nil then
+            ind_opts.dimension = 2  -- default value for dimension
+        end
 
-		if ind_opts.distance == nil then
-			ind_opts.distance = 'euclid'  -- default value for distance
-		end
+        if ind_opts.distance == nil then
+            ind_opts.distance = 'euclid'  -- default value for distance
+        end
 
-		if existing_index.dimension ~= ind_opts.dimension then
-			opts_up.dimension = ind_opts.dimension
+        if existing_index.dimension ~= ind_opts.dimension then
+            opts_up.dimension = ind_opts.dimension
             opts_down.dimension = existing_index.dimension
-			changed_opts_count = changed_opts_count + 1
-		end
+            changed_opts_count = changed_opts_count + 1
+        end
 
-		if existing_index.distance ~= ind_opts.distance then
-			opts_up.distance = ind_opts.distance
+        if existing_index.distance ~= ind_opts.distance then
+            opts_up.distance = ind_opts.distance
             opts_down.distance = existing_index.distance
-			changed_opts_count = changed_opts_count + 1
-		end
-	end
+            changed_opts_count = changed_opts_count + 1
+        end
+    end
 
-	local parts_changed = false
+    local parts_changed = false
     assert(ind_opts.parts ~= nil, 'index parts must not be nil')
     local old_parts = compat.normalize_index_tuple_format(index_tuple[6])
     local new_parts = compat.normalize_index_tuple_format(ind_opts.parts)
@@ -148,19 +149,35 @@ local function get_changed_opts_for_index(spacer, space_name, existing_index, in
         end
     end
 
-	if parts_changed then
-		opts_up.parts = compat.index_parts_from_normalized(new_parts)
+    if parts_changed then
+        opts_up.parts = compat.index_parts_from_normalized(new_parts)
         opts_down.parts = compat.index_parts_from_normalized(old_parts)
-		changed_opts_count = changed_opts_count + 1
-	end
+        changed_opts_count = changed_opts_count + 1
+    end
 
-	if changed_opts_count == 0 then
-		return nil, nil
-	end
+    if changed_opts_count == 0 then
+        return nil, nil
+    end
 
-	return opts_up, opts_down
+    return opts_up, opts_down
 end
 
+
+local function build_opts_for_space(spacer, space_name)
+    local sp = box.space[space_name]
+    if sp == nil then
+        return nil
+    end
+
+    local space_opts = {
+        engine = sp.engine,
+        temporary = sp.temporary,
+        field_count = sp.field_count,
+        user = sp.user
+    }
+    
+    return space_opts
+end
 
 local function build_opts_for_index(spacer, space_name, index_id)
     local sp = box.space[space_name]
@@ -173,7 +190,7 @@ local function build_opts_for_index(spacer, space_name, index_id)
         return nil
     end
 
-    local raw_index_options = box.space._index:get({sp.id, ind.id})
+    local raw_index_options = box.space._vindex:get({sp.id, ind.id})
     if raw_index_options == nil then
         return nil
     end
@@ -181,6 +198,7 @@ local function build_opts_for_index(spacer, space_name, index_id)
 
     local index_opts = {}
 
+    index_opts.id = ind.id
     index_opts.type = ind.type
     index_opts.unique = ind.unique
     index_opts.distance = raw_index_options.distance
@@ -202,11 +220,20 @@ local function build_opts_for_index(spacer, space_name, index_id)
 end
 
 
-local function indexes_migration(spacer, stmt, space_name, indexes, f, f_extra)
+local function indexes_migration(spacer, space_name, indexes, f, f_extra, check_alter)    
+    if check_alter == nil then
+        check_alter = true
+    end
+    
+    local up = {}
+    local down = {}
     local created_indexes = {}
 
     for _, ind in ipairs(indexes) do
         assert(ind.name ~= nil, string.format("Index name cannot be null (space '%s')", space_name))
+        if ind.type == nil then
+            ind.type = 'tree'
+        end
 
         local ind_opts = {}
         ind_opts.id = ind.id
@@ -234,17 +261,17 @@ local function indexes_migration(spacer, stmt, space_name, indexes, f, f_extra)
         if sp ~= nil then
             existing_index = sp.index[ind.name]
         end
-        if existing_index == nil then
-            stmt:up('box.space.%s:create_index(%s, %s)', space_name, inspect(ind.name), inspect(ind_opts))
-            stmt:down('box.space.%s.index.%s:drop()', space_name, ind.name)
+        if not check_alter or existing_index == nil then
+            table.insert(up, {'box.space.%s:create_index(%s, %s)', space_name, inspect(ind.name), inspect(ind_opts)})
+            table.insert(down, {'box.space.%s.index.%s:drop()', space_name, ind.name})
         else
             local opts_up, opts_down = get_changed_opts_for_index(spacer, space_name, existing_index, ind_opts)
             if opts_up then
-                stmt:up('box.space.%s.index.%s:alter(%s)', space_name, ind.name, inspect(opts_up))
+                table.insert(up, {'box.space.%s.index.%s:alter(%s)', space_name, ind.name, inspect(opts_up)})
             end
 
             if opts_down then
-                stmt:down('box.space.%s.index.%s:alter(%s)', space_name, ind.name, inspect(opts_down))
+                table.insert(down, {'box.space.%s.index.%s:alter(%s)', space_name, ind.name, inspect(opts_down)})
             end
         end
 
@@ -252,10 +279,10 @@ local function indexes_migration(spacer, stmt, space_name, indexes, f, f_extra)
     end
 
     -- check obsolete indexes in space
-	if not spacer.keep_obsolete_indexes then
+    if not spacer.keep_obsolete_indexes then
         local sp = box.space[space_name]
         if sp ~= nil then
-            local sp_indexes = box.space._index:select({sp.id})
+            local sp_indexes = box.space._vindex:select({sp.id})
             local primary_index_name
             for _,ind in ipairs(sp_indexes) do
                 -- finding primary index
@@ -268,25 +295,27 @@ local function indexes_migration(spacer, stmt, space_name, indexes, f, f_extra)
             if not created_indexes[primary_index_name] then
                 -- primary index recreation must be first
                 local ind_opts = build_opts_for_index(spacer, space_name, 0)
-                stmt:down('box.space.%s:create_index(%s, %s)', space_name, inspect(primary_index_name), inspect(ind_opts))
+                table.insert(down, {'box.space.%s:create_index(%s, %s)', space_name, inspect(primary_index_name), inspect(ind_opts)})
             end
 
-            for _,ind in ipairs(sp_indexes) do
+            for _, ind in ipairs(sp_indexes) do
                 ind = {id = ind[spacer.F._index.iid], name = ind[spacer.F._index.name]}
 
                 if ind.id ~= 0 and not created_indexes[ind.name] then
                     local ind_opts = build_opts_for_index(spacer, space_name, ind.id)
-                    stmt:up('box.space.%s.index.%s:drop()', space_name, ind.name)
-                    stmt:down('box.space.%s:create_index(%s, %s)', space_name, inspect(ind.name), inspect(ind_opts))
+                    table.insert(up, {'box.space.%s.index.%s:drop()', space_name, ind.name})
+                    table.insert(down, {'box.space.%s:create_index(%s, %s)', space_name, inspect(ind.name), inspect(ind_opts)})
                 end
             end
 
             if not created_indexes[primary_index_name] then
                 -- primary index drop must be last
-                stmt:up('box.space.%s.index.%s:drop()', space_name, primary_index_name)
+                table.insert(up, {'box.space.%s.index.%s:drop()', space_name, primary_index_name})
             end
         end
-	end
+    end
+    
+    return up, down
 end
 
 
@@ -381,6 +410,7 @@ end
 local function spaces_migration(spacer, spaces_decl)
     local stmt = stmt_obj.new()
 
+    local declared_spaces = {}
     for _, space_decl in pairs(spaces_decl) do
         local space_name = space_decl.space_name
         local space_format = space_decl.space_format
@@ -398,16 +428,17 @@ local function spaces_migration(spacer, spaces_decl)
             if space_opts ~= nil then
                 space_opts_str = inspect(space_opts)
             end
-            stmt:only_up()
             stmt:up_tx_begin()
             stmt:up('box.schema.create_space(%s, %s)', inspect(space_name), space_opts_str)
             stmt:up('box.space.%s:format(%s)', space_name, inspect(space_format))
 
             local f, f_extra = generate_field_info(space_format)
-            indexes_migration(spacer, stmt, space_name, space_indexes, f, f_extra)
+            local up, _ = indexes_migration(spacer, space_name, space_indexes, f, f_extra)
+            stmt:up_apply(up)
+            stmt:up('box.space.%s:replace({%s})', spacer.models_space.name, inspect(space_name))
 
-            stmt:only_up(false)
             stmt:down('box.space.%s:drop()', space_name)
+            stmt:down('box.space.%s:delete({%s})', spacer.models_space.name, inspect(space_name))
         else
             -- if space already exists
             local sp_tuple = box.space._vspace.index.name:get({space_name})
@@ -426,7 +457,41 @@ local function spaces_migration(spacer, spaces_decl)
             end
 
             local f, f_extra = generate_field_info(space_format)
-            indexes_migration(spacer, stmt, space_name, space_indexes, f, f_extra)
+            local up, down = indexes_migration(spacer, space_name, space_indexes, f, f_extra)
+            stmt:up_apply(up)
+            stmt:down_apply(down)
+        end
+        declared_spaces[space_name] = true
+    end
+
+    if not spacer.keep_obsolete_spaces then
+        for k, sp in pairs(box.space) do
+            if type(k) == 'string' and spacer.models_space:get({k}) then
+                if not declared_spaces[k] then
+                    -- space drop
+                    local space_name = k
+                    local space_format = sp:format()
+                    local space_opts = build_opts_for_space(spacer, space_name)
+                    stmt:up('box.space.%s:drop()', space_name)
+                    stmt:up('box.space.%s:delete({%s})', spacer.models_space.name, inspect(space_name))
+                    stmt:down('box.schema.create_space(%s, %s)', inspect(space_name), inspect(space_opts))
+                    stmt:down('box.space.%s:format(%s)', space_name, inspect(space_format))
+
+                    if sp.index[0] ~= nil then  -- primary index
+                        local ind = sp.index[0]
+                        local ind_opts = build_opts_for_index(spacer, space_name, ind.id)
+                        stmt:down('box.space.%s:create_index(%s, %s)', space_name, inspect(ind.name), inspect(ind_opts))
+                    end
+
+                    for k2, ind in pairs(sp.index) do
+                        if type(k2) == 'string' and ind.id ~= 0 then
+                            local ind_opts = build_opts_for_index(spacer, space_name, ind.id)
+                            stmt:down('box.space.%s:create_index(%s, %s)', space_name, inspect(ind.name), inspect(ind_opts))
+                        end
+                    end
+                    stmt:down('box.space.%s:replace({%s})', spacer.models_space.name, inspect(space_name))
+                end
+            end
         end
     end
 

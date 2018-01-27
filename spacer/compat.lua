@@ -88,7 +88,6 @@ local function normalize_index_tuple_format(format)
     else
         -- 1.6 format like {1, 'num', 2, 'string', ...}
         local parts = {}
-        print(require'json'.encode(format))
         assert(#format % 2 == 0, 'format length must be even')
         for i = 1, #format, 2 do
             table.insert(parts, {

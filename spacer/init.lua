@@ -12,20 +12,17 @@ local transformations = require 'spacer.transformations'
 local NULL = require 'msgpack'.NULL
 
 local SCHEMA_KEY = '_spacer_ver'
-local __models__ = {}
-local F = {}
-local F_FULL = {}
-local T = {}
+local SPACER_MODELS_SPACE = '_spacer_models'
 
 
-local function init_fields_and_transform(space_name, format)
+local function _init_fields_and_transform(self, space_name, format)
     local f, f_extra = space_migration.generate_field_info(format)
-    F[space_name] = f
-    F_FULL[space_name] = f_extra
-    T[space_name] = {}
-    T[space_name].dict = transformations.tuple2hash(f)
-	T[space_name].tuple = transformations.hash2tuple(f)
-    T[space_name].hash = T[space_name].dict  -- alias
+    self.F[space_name] = f
+    self.F_FULL[space_name] = f_extra
+    self.T[space_name] = {}
+    self.T[space_name].dict = transformations.tuple2hash(f)
+    self.T[space_name].tuple = transformations.hash2tuple(f)
+    self.T[space_name].hash = self.T[space_name].dict  -- alias
 end
 
 
@@ -33,14 +30,14 @@ local function space(self, name, format, indexes, opts)
     assert(name ~= nil, "Space name cannot be null")
     assert(format ~= nil, "Space format cannot be null")
     assert(indexes ~= nil, "Space indexes cannot be null")
-    __models__[name] = {
+    self.__models__[name] = {
         type = 'raw',
         space_name = name,
         space_format = format,
         space_indexes = indexes,
         space_opts = opts,
     }
-    init_fields_and_transform(name, format)
+    _init_fields_and_transform(self, name, format)
 
     if self.automigrate then
         local m = self:_makemigration('automigration', true, true)
@@ -98,21 +95,26 @@ local function migrate_up(self, _n)
             name = 'nil'
         end
         log.info('No migrations to apply. Last migration: %s_%s', inspect(ver), name)
-        return
+        return nil
     end
 
     for _, m in ipairs(migrations) do
         local ok, err = self:_migrate_one_up(m.migration)
         if not ok then
             log.error('Error running migration %s: %s', m.filename, err)
-            return false
+            return {
+                version = m.ver,
+                name = m.name,
+                migration = m.filename,
+                error = err
+            }
         end
 
         box.space._schema:replace({SCHEMA_KEY, m.ver, m.name})
         log.info('Applied migration "%s"', m.filename)
     end
 
-    return true
+    return nil
 end
 
 
@@ -158,14 +160,19 @@ local function migrate_down(self, _n)
             name = 'nil'
         end
         log.info('No migrations to apply. Last migration: %s_%s', inspect(ver), name)
-        return
+        return nil
     end
 
     for i, m in ipairs(migrations) do
         local ok, err = self:_migrate_one_down(m.migration)
         if not ok then
             log.error('Error running migration %s: %s', m.filename, err)
-            return false
+            return {
+                version = m.ver,
+                name = m.name,
+                migration = m.filename,
+                error = err
+            }
         end
 
         local prev_migration = migrations[i + 1]
@@ -181,7 +188,7 @@ local function migrate_down(self, _n)
         end
     end
 
-    return true
+    return nil
 end
 
 
@@ -196,7 +203,7 @@ local function _makemigration(self, name, autogenerate, nofile)
     local date = clock.time()
 
     local count = 0
-    for _, space_decl in pairs(__models__) do
+    for _, space_decl in pairs(self.__models__) do
         count = count + 1
     end
 
@@ -209,7 +216,7 @@ local function _makemigration(self, name, autogenerate, nofile)
     local up_body = ''
     local down_body = ''
     if autogenerate then
-        local migration = space_migration.spaces_migration(self, __models__)
+        local migration = space_migration.spaces_migration(self, self.__models__)
         requirements_body = table.concat(
             fun.iter(migration.requirements):map(
                 function(key, r)
@@ -247,34 +254,76 @@ return {
 end
 local function makemigration(self, ...) self:_makemigration(...) end
 
-local function _clear_schema(self)
+local function clear_schema(self)
     box.space._schema:delete({SCHEMA_KEY})
+    self.models_space:truncate()
 end
 
-local M
-if rawget(_G,'__spacer__') then
-    M = rawget(_G,'__spacer__')
+local function _init_models_space(self)
+    local sp = box.schema.create_space(SPACER_MODELS_SPACE, {if_not_exists = true})
+    sp:format({
+        {name = 'name', type = 'string'},
+    })
+    sp:create_index('primary', {
+        parts = {
+            {1, 'string'}
+        },
+        if_not_exists = true
+    })
+
+    return sp
+end
+
+local M = rawget(_G, '__spacer__')
+if M ~= nil then
+    -- 2nd+ load
+    local m
+    local prune_models = {}
+    for m, _ in pairs(M.F) do
+        if box.space._vspace.index.name:get({m}) == nil then
+            table.insert(prune_models, m)
+        end
+    end
+
+    M.__models__ = {}  -- clean all loaded models
+    for _, m in ipairs(prune_models) do
+        M.F[m] = nil
+        M.F_FULL[m] = nil
+        M.T[m] = nil
+    end
+
+    -- initialize current spaces fields and transformations
+    for _, sp in box.space._vspace:pairs() do
+        _init_fields_and_transform(M, sp[3], sp[7])
+    end
 else
+    -- 1st load
     M = setmetatable({
         migrations_path = NULL,
         automigrate = NULL,
+        keep_obsolete_spaces = NULL,
         keep_obsolete_indexes = NULL,
-        __models__ = __models__,
-        F = F,
-        F_FULL = F_FULL,
-        T = T,
+        models_space = NULL,
+        __models__ = {},
+        F = {},
+        F_FULL = {},
+        T = {},
     },{
-        __call = function(M, user_opts)
+        __call = function(self, user_opts)
             local valid_options = {
                 migrations = {
                     required = true,
-                    M_name = 'migrations_path'
+                    self_name = 'migrations_path'
                 },
                 global_ft = {
                     required = false,
                     default = true,
                 },
                 automigrate = {
+                    required = false,
+                    default = false,
+                },
+                keep_obsolete_spaces = {
                     required = false,
                     default = false,
                 },
@@ -326,37 +375,38 @@ else
             end
 
             for valid_key, opt_info in pairs(valid_options) do
-                if opt_info.M_name == nil then
-                    opt_info.M_name = valid_key
+                if opt_info.self_name == nil then
+                    opt_info.self_name = valid_key
                 end
 
-                M[opt_info.M_name] = opts[valid_key]
+                self[opt_info.self_name] = opts[valid_key]
             end
 
             -- initialize current spaces fields and transformations
-            local spaces = box.space._vspace:select{}
-            for _, sp in ipairs(spaces) do
-                init_fields_and_transform(sp[3], sp[7])
+            for _, sp in box.space._vspace:pairs() do
+                _init_fields_and_transform(self, sp[3], sp[7])
             end
 
             if opts.global_ft then
-                rawset(_G, 'F', F)
-                rawset(_G, 'F_FULL', F_FULL)
-                rawset(_G, 'T', T)
+                rawset(_G, 'F', self.F)
+                rawset(_G, 'F_FULL', self.F_FULL)
+                rawset(_G, 'T', self.T)
             end
 
-            return M
+            self.models_space = _init_models_space(self)
+
+            return self
         end,
         __index = {
             _migrate_one_up = _migrate_one_up,
             _migrate_one_down = _migrate_one_down,
             _makemigration = _makemigration,
-            _clear_schema = _clear_schema,
 
             space = space,
             migrate_up = migrate_up,
             migrate_down = migrate_down,
             makemigration = makemigration,
+            clear_schema = _clear_schema,
         }
     })
     rawset(_G, '__spacer__', M)
