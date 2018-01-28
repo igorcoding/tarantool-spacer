@@ -12,8 +12,8 @@ Tarantool Spacer. Automatic models migrations.
     * `dimension` and `distance` (for RTREE indexes)
     * `parts`
 * Format alterations
-    * New fields (only to the end of format list). 
-      Setting values for existing tuples is handled by the [moonwalker](https://github.com/tarantool/moonwalker) library 
+    * New fields (only to the end of format list).
+      Setting values for existing tuples is handled by the [moonwalker](https://github.com/tarantool/moonwalker) library
     * Field's `is_nullable` and `collation` changes
     * **[IMPORTANT] `type` and `name` changes are prohibited**
 
@@ -39,7 +39,7 @@ box.spacer = require 'spacer'({
 
 ## Define spaces
 
-You can easily define new spaces in a separate file (e.g. `models.lua`) and all 
+You can easily define new spaces in a separate file (e.g. `models.lua`) and all
 you will need to do is to `require` it from `init.lua` right after spacer initialization:
 ```lua
 box.spacer = require 'spacer'({
@@ -156,7 +156,7 @@ To rollback all migration just pass any huge number.
 
 # Fields
 
-Space fields can be accessed by the global variable `F`, which is set by spacer 
+Space fields can be accessed by the global variable `F`, which is set by spacer
 or in the spacer directly (`box.spacer.F`):
 
 ```lua

@@ -77,7 +77,7 @@ local function get_changed_opts_for_index(spacer, space_name, existing_index, in
             -- user specified just 'true' or 'false' as sequence, so any sequence is ok
             if ind_opts.sequence == true and existing_seq == nil then
                 seq_changed = true
-                old_sequence_value = msgpack.NULL
+                old_sequence_value = false
             elseif ind_opts.sequence == false and existing_seq ~= nil then
                 seq_changed = true
                 old_sequence_value = existing_seq[fld_sequence_name]
@@ -175,7 +175,7 @@ local function build_opts_for_space(spacer, space_name)
         field_count = sp.field_count,
         user = sp.user
     }
-    
+
     return space_opts
 end
 
@@ -200,7 +200,11 @@ local function build_opts_for_index(spacer, space_name, index_id)
 
     index_opts.id = ind.id
     index_opts.type = ind.type
-    index_opts.unique = ind.unique
+    if string.lower(index_opts.type) == 'rtree' then
+        index_opts.unique = false
+    else
+        index_opts.unique = ind.unique
+    end
     index_opts.distance = raw_index_options.distance
     index_opts.dimension = raw_index_options.dimension
     if ind.sequence_id ~= nil then
@@ -220,11 +224,11 @@ local function build_opts_for_index(spacer, space_name, index_id)
 end
 
 
-local function indexes_migration(spacer, space_name, indexes, f, f_extra, check_alter)    
+local function indexes_migration(spacer, space_name, indexes, f, f_extra, check_alter)
     if check_alter == nil then
         check_alter = true
     end
-    
+
     local up = {}
     local down = {}
     local created_indexes = {}
@@ -238,7 +242,14 @@ local function indexes_migration(spacer, space_name, indexes, f, f_extra, check_
         local ind_opts = {}
         ind_opts.id = ind.id
         ind_opts.type = string.lower(ind.type)
-        ind_opts.unique = ind.unique
+        if ind_opts.type == 'rtree' then
+            if ind.unique == true then
+                return error('RTREE indexes cannot be unique')
+            end
+            ind_opts.unique = false
+        else
+            ind_opts.unique = ind.unique
+        end
         ind_opts.if_not_exists = ind.if_not_exists
         ind_opts.sequence = ind.sequence
 
@@ -314,7 +325,7 @@ local function indexes_migration(spacer, space_name, indexes, f, f_extra, check_
             end
         end
     end
-    
+
     return up, down
 end
 
@@ -377,7 +388,7 @@ local function find_format_changes(spacer, existing_format, new_format)
 end
 
 
-local function run_format_changes(spacer, stmt, space_name, format_changes)
+local function run_format_changes(spacer, stmt, space_name, format_changes, indexes_decl)
     local index0 = box.space[space_name].index[0]
     assert(index0 ~= nil, string.format('Index #0 not found in space %s', space_name))
 
@@ -385,7 +396,13 @@ local function run_format_changes(spacer, stmt, space_name, format_changes)
     local has_new_changes = false
     for _, ch in ipairs(format_changes) do
         if ch.type == 'new' then
-            table.insert(updates, {'=', ch.fieldno, ops.get_default_for_type(ch.field_type)})
+            table.insert(updates,
+                { '=',
+                  ch.fieldno,
+                  compat.get_default_for_type(ch.field_type,
+                                              ch.field_name,
+                                              indexes_decl)
+                })
             has_new_changes = true
         end
     end
@@ -402,7 +419,7 @@ local function run_format_changes(spacer, stmt, space_name, format_changes)
 }]], space_name, inspect(space_name), space_name, inspect(updates))
     end
 
-    if has_new_changes then
+    if has_new_changes and spacer.down_migration_fail_on_impossible then
         stmt:down('assert(false, "Need to write explicitly a down migration for field removal")')
     end
 end
@@ -451,7 +468,7 @@ local function spaces_migration(spacer, spaces_decl)
             if #format_changes > 0 then
                 stmt:up('box.space.%s:format({})', space_name)  -- clear format
                 stmt:down('box.space.%s:format({})', space_name)  -- clear format
-                run_format_changes(spacer, stmt, space_name, format_changes)
+                run_format_changes(spacer, stmt, space_name, format_changes, space_indexes)
                 stmt:up_last('box.space.%s:format(%s)', space_name, inspect(space_format))
                 stmt:down_last('box.space.%s:format(%s)', space_name, inspect(existing_format))
             end

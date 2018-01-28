@@ -9,4 +9,3 @@ end
 return function(...)
     return inspect.inspect(..., {process = remove_all_metatables})
 end
-

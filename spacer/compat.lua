@@ -127,8 +127,71 @@ local function index_parts_from_normalized(normalized_parts)
 end
 
 
+local function get_default_for_type(type, field_name, indexes_decl)
+    type = string.lower(type)
+    if indexes_decl == nil then
+        indexes_decl = {}
+    end
+
+    if type == 'unsigned' or type == 'uint' or type == 'num' then
+        return 0
+    end
+
+    if type == 'integer' or type == 'int' then
+        return 0
+    end
+
+    if type == 'number' then
+        return 0
+    end
+
+    if type == 'string' or type == 'str' then
+        return ""
+    end
+
+    if type == 'boolean' then
+        return false
+    end
+
+    if type == 'array' then
+        if field_name == nil then
+            return {}
+        end
+
+        for _, ind in ipairs(indexes_decl) do
+            if string.lower(ind.type) == 'rtree'
+                and #ind.parts > 0
+                and ind.parts[1] == field_name then
+                    local dim = ind.dimension
+                    if dim == nil then
+                        dim = 2
+                    end
+
+                    local t = {}
+                    for _ = 1,dim do
+                        table.insert(t, 0)
+                    end
+                    return t
+            end
+        end
+
+        return {}
+    end
+
+    if type == 'map' then
+        return setmetatable({}, {__serialize = 'map'})
+    end
+
+    if type == 'scalar' then
+        return 0
+    end
+
+    error(string.format('unknown type "%s"', type))
+end
+
 return {
     index_parts_from_fields = index_parts_from_fields,
     normalize_index_tuple_format = normalize_index_tuple_format,
     index_parts_from_normalized = index_parts_from_normalized,
+    get_default_for_type = get_default_for_type,
 }

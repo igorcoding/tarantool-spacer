@@ -5,7 +5,7 @@ source  = {
     branch = 'v2',
 }
 description = {
-    summary  = "Tarantool Spacer. Automatic model migrations.",
+    summary  = "Tarantool Spacer. Automatic models migrations.",
     homepage = 'https://github.com/igorcoding/tarantool-spacer',
     license  = 'MIT',
 }
@@ -14,17 +14,11 @@ dependencies = {
     'inspect >= 3.1.0-1',
 }
 build = {
-    type = 'builtin',
-    modules = {
-        ['spacer.init'] = 'spacer/init.lua',
-        ['spacer.compat'] = 'spacer/compat.lua',
-        ['spacer.fileio'] = 'spacer/fileio.lua',
-        ['spacer.migration'] = 'spacer/migration.lua',
-        ['spacer.myinspect'] = 'spacer/myinspect.lua',
-        ['spacer.ops'] = 'spacer/ops.lua',
-        ['spacer.stmt'] = 'spacer/stmt.lua',
-        ['spacer.transformations'] = 'spacer/transformations.lua',
-        ['spacer.util'] = 'spacer/util.lua',
+    type = 'cmake',
+    variables = {
+        CMAKE_BUILD_TYPE="RelWithDebInfo",
+        TARANTOOL_INSTALL_LIBDIR="$(LIBDIR)",
+        TARANTOOL_INSTALL_LUADIR="$(LUADIR)"
     }
 }
 

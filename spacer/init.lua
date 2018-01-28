@@ -57,6 +57,17 @@ local function space(self, name, format, indexes, opts)
 end
 
 
+local function space_drop(self, name)
+    assert(name ~= nil, "Space name cannot be null")
+    assert(self.__models__[name] ~= nil, "Space is not defined")
+
+    self.__models__[name] = nil
+    self.F[name] = nil
+    self.F_FULL[name] = nil
+    self.T[name] = nil
+end
+
+
 ---
 --- _migrate_one_up function
 ---
@@ -202,16 +213,6 @@ local function _makemigration(self, name, autogenerate, nofile)
     end
     local date = clock.time()
 
-    local count = 0
-    for _, space_decl in pairs(self.__models__) do
-        count = count + 1
-    end
-
-    if count == 0 then
-        log.error('No spaces declared. Make sure to call spacer.space() function.')
-        return
-    end
-
     local requirements_body = ''
     local up_body = ''
     local down_body = ''
@@ -303,6 +304,7 @@ else
         automigrate = NULL,
         keep_obsolete_spaces = NULL,
         keep_obsolete_indexes = NULL,
+        down_migration_fail_on_impossible = NULL,
         models_space = NULL,
         __models__ = {},
         F = {},
@@ -330,6 +332,10 @@ else
                 keep_obsolete_indexes = {
                     required = false,
                     default = false,
+                },
+                down_migration_fail_on_impossible = {
+                    required = false,
+                    default = true,
                 },
             }
 
@@ -403,10 +409,11 @@ else
             _makemigration = _makemigration,
 
             space = space,
+            space_drop = space_drop,
             migrate_up = migrate_up,
             migrate_down = migrate_down,
             makemigration = makemigration,
-            clear_schema = _clear_schema,
+            clear_schema = clear_schema,
         }
     })
     rawset(_G, '__spacer__', M)
