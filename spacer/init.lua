@@ -26,7 +26,7 @@ local function _init_fields_and_transform(self, space_name, format)
 end
 
 
-local function space(self, name, format, indexes, opts)
+local function _space(self, name, format, indexes, opts)
     assert(name ~= nil, "Space name cannot be null")
     assert(format ~= nil, "Space format cannot be null")
     assert(indexes ~= nil, "Space indexes cannot be null")
@@ -54,6 +54,11 @@ local function space(self, name, format, indexes, opts)
             error(string.format('Error while applying migration: %s', err))
         end
     end
+end
+
+local function space(self, space_decl)
+    assert(space_decl ~= nil, 'Space declaration is missing')
+    return self:_space(space_decl.name, space_decl.format, space_decl.indexes, space_decl.opts)
 end
 
 
@@ -404,6 +409,7 @@ else
             return self
         end,
         __index = {
+            _space = _space,
             _migrate_one_up = _migrate_one_up,
             _migrate_one_down = _migrate_one_down,
             _makemigration = _makemigration,

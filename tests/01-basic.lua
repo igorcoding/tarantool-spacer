@@ -40,8 +40,12 @@ local function spacer_create_space_object(spacer)
     local fmt = {
         { name = 'id', type = 'unsigned' }
     }
-    spacer:space('object', fmt, {
-        { name = 'primary', type = 'tree', unique = true, parts = { 'id' } }
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' } }
+        }
     })
     spacer:makemigration('object_init')
     spacer:migrate_up(1)
@@ -53,8 +57,12 @@ local function test__space_create(t, spacer)
     local fmt = {
         { name = 'id', type = 'unsigned' }
     }
-    spacer:space('object', fmt, {
-        { name = 'primary', type = 'tree', unique = true, parts = { 'id' } }
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' } }
+        }
     })
 
     spacer:makemigration('object_init')
@@ -89,9 +97,13 @@ local function test__add_field_name_and_index(t, spacer)
         { name = 'name', type = 'string' },
     }
 
-    spacer:space('object', fmt, {
-        { name = 'primary', type = 'tree', unique = true, parts = { 'id' } },
-        { name = 'name', type = 'hash', unique = true, parts = { 'name', 'id' } }
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' } },
+            { name = 'name', type = 'hash', unique = true, parts = { 'name', 'id' } }
+        }
     })
 
     spacer:makemigration('object_name')
@@ -130,9 +142,13 @@ local function test__alter_index_parts(t, spacer)
         { name = 'name', type = 'string' },
     }
 
-    spacer:space('object', fmt, {
-        { name = 'primary', type = 'tree', unique = true, parts = { 'id' } },
-        { name = 'name', type = 'hash', unique = true, parts = { 'name' } }
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' } },
+            { name = 'name', type = 'hash', unique = true, parts = { 'name' } }
+        }
     })
 
     spacer:makemigration('object_name_index_alter')
@@ -160,9 +176,13 @@ local function test__index_many_alters(t, spacer)
         { name = 'name', type = 'string' },
     }
 
-    spacer:space('object', fmt, {
-        { name = 'primary', type = 'tree', unique = true, parts = { 'id' }, sequence = true },
-        { name = 'name', type = 'tree', unique = false, parts = { 'name' } }
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' }, sequence = true },
+            { name = 'name', type = 'tree', unique = false, parts = { 'name' } }
+        }
     })
 
     spacer:makemigration('object_id_sequence')
@@ -197,10 +217,14 @@ local function test__add_rtree_index(t, spacer)
         { name = 'arr', type = 'array' },
     }
 
-    spacer:space('object', fmt, {
-        { name = 'primary', type = 'tree', unique = true, parts = { 'id' }, sequence = true },
-        { name = 'name', type = 'tree', unique = false, parts = { 'name' } },
-        { name = 'rtree', type = 'rtree', dimension = 3, distance = 'euclid', unique = false, parts = { 'arr' } }
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' }, sequence = true },
+            { name = 'name', type = 'tree', unique = false, parts = { 'name' } },
+            { name = 'rtree', type = 'rtree', dimension = 3, distance = 'euclid', unique = false, parts = { 'arr' } }
+        }
     })
     spacer:makemigration('object_rtree')
 
@@ -238,9 +262,13 @@ local function test__drop_rtree_index(t, spacer)
         { name = 'arr', type = 'array' },
     }
 
-    spacer:space('object', fmt, {
-        { name = 'primary', type = 'tree', unique = true, parts = { 'id' }, sequence = true },
-        { name = 'name', type = 'tree', unique = false, parts = { 'name' } },
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' }, sequence = true },
+            { name = 'name', type = 'tree', unique = false, parts = { 'name' } },
+        }
     })
     spacer:makemigration('object_rtree_del')
     spacer_up(t, spacer)

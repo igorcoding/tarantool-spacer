@@ -55,21 +55,24 @@ Note that spacer now has methods
 ```lua
 local spacer = require 'spacer'
 
-spacer:space('object', {
-    { name = 'id', type = 'unsigned' },
-    { name = 'name', type = 'string', is_nullable = true },
-}, {
-    { name = 'primary', type = 'tree', unique = true, parts = {'id'}, sequence = true },
-    { name = 'name', type = 'tree', unique = false, parts = {'name', 'id'} },
+spacer:space({
+    name = 'object',
+    format = {
+        { name = 'id', type = 'unsigned' },
+        { name = 'name', type = 'string', is_nullable = true },
+    },
+    indexes = {
+        { name = 'primary', type = 'tree', unique = true, parts = {'id'}, sequence = true },
+        { name = 'name', type = 'tree', unique = false, parts = {'name', 'id'} },
+    }
 })
-
 ```
 
-`spacer:space` has 4 arguments:
-1. space name (required)
-2. space format (required)
-3. space indexes array (required)
-4. any box.schema.create_space options (optional). Please refer to Tarantool documentation for details.
+`spacer:space` has 4 parameters:
+1. `name` - space name (required)
+2. `format` - space format (required)
+3. `indexes` - space indexes array (required)
+4. `opts` - any box.schema.create_space options (optional). Please refer to Tarantool documentation for details.
 
 Indexes parts must be defined using only field names.
 
