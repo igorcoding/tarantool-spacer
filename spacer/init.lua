@@ -260,10 +260,31 @@ return {
 end
 local function makemigration(self, ...) self:_makemigration(...) end
 
+---
+--- clear_schema function
+---
 local function clear_schema(self)
     box.space._schema:delete({SCHEMA_KEY})
     self.models_space:truncate()
 end
+
+---
+--- get function
+---
+local function get(self, name, compile)
+    return util.read_migration(self.migrations_path, name, compile)
+end
+
+---
+--- list function
+---
+local function list(self, verbose)
+    if verbose == nil then
+        verbose = false
+    end
+    return util.list_migrations(self.migrations_path, verbose)
+end
+
 
 local function _init_models_space(self)
     local sp = box.schema.create_space(SPACER_MODELS_SPACE, {if_not_exists = true})
@@ -420,6 +441,8 @@ else
             migrate_down = migrate_down,
             makemigration = makemigration,
             clear_schema = clear_schema,
+            get = get,
+            list = list,
         }
     })
     rawset(_G, '__spacer__', M)

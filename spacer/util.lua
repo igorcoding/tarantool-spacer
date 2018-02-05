@@ -59,45 +59,102 @@ local function compile_migration(data)
     return loadstring(data)
 end
 
+
+local function _list_migration_files(path)
+    local res = {}
+    local files = fileio.listdir(path)
+    for _, f in ipairs(files) do
+        if f.mode == 'file' then
+            local filename = fio.basename(f.path)
+            local filename_no_ext = fio.basename(f.path, '.lua')
+            local m_ver, m_name = string.match(filename_no_ext, '(%d+)_(.+)')
+            if m_ver ~= nil and m_name ~= nil then
+                table.insert(res, {
+                    ver = tonumber(m_ver),
+                    name = m_name,
+                    path = f.path,
+                    filename = filename
+                })
+            end
+        end
+    end
+
+    return res
+end
+
+
+local function read_migration(path, name, compile)
+    if compile == nil then
+        compile = true
+    end
+
+    assert(name ~= nil, 'Name is required')
+
+    for _, m in ipairs(_list_migration_files(path)) do
+        if tostring(m.ver) == name
+            or m.name == name
+            or m.filename == name then
+                local data = fileio.read_file(m.path)
+                if compile then
+                    local err
+                    data, err = loadstring(data)
+                    if data == nil then
+                        error(string.format("Error compiling migration '%s': \n%s", filename, err))
+                    end
+
+                    data = data()
+                end
+
+                m.migration = data
+                return m
+        end
+    end
+
+    return nil
+end
+
+
+local function list_migrations(path, verbose)
+    local res = {}
+
+    local files = fileio.listdir(path)
+    for _, m in ipairs(_list_migration_files(path)) do
+        if not verbose then
+            table.insert(res, m.filename)
+        else
+            table.insert(res, m)
+        end
+    end
+
+    return res
+end
+
+
 local function read_migrations(path, direction, from_migration, n)
     local migrations = {}
-    local files = fileio.listdir(path)
+    local files = _list_migration_files(path)
 
     if direction == 'down' then
         reverse_table(files)
     end
 
-    for _, f in ipairs(files) do
-        if f.mode == 'file' then
-            local filename = fio.basename(f.path)
-            local filename_no_ext = fio.basename(f.path, '.lua')
-            local ver, name = string.match(filename_no_ext, '(%d+)_(.+)')
-            if ver ~= nil and name ~= nil then
-                ver = tonumber(ver)
-
-                local cond = from_migration == nil or ver > from_migration
-                if direction == 'down' then
-                    cond = from_migration == nil or ver <= from_migration
-                end
-                if cond then
-                    local data = fileio.read_file(f.path)
-                    local compiled_code, err = loadstring(data)
-                    if compiled_code == nil then
-                        error(string.format("Error compiling migration '%s': \n%s", filename, err))
-                    end
-                    table.insert(migrations, {
-                        ver = ver,
-                        name = name,
-                        path = f.path,
-                        filename = filename,
-                        migration = compiled_code
-                    })
-                end
+    for _, m in ipairs(files) do
+        local cond = from_migration == nil or m.ver > from_migration
+        if direction == 'down' then
+            cond = from_migration == nil or m.ver <= from_migration
+        end
+        if cond then
+            local data = fileio.read_file(m.path)
+            local compiled_code, err = loadstring(data)
+            if compiled_code == nil then
+                error(string.format("Error compiling migration '%s': \n%s", m.filename, err))
             end
+            m.migration = compiled_code
+            table.insert(migrations, m)
+        end
 
-            if n ~= nil and #migrations == n then
-                break
-            end
+        if n ~= nil and #migrations == n then
+            break
         end
     end
     return migrations
@@ -113,6 +170,8 @@ return {
     make_mixin = make_mixin,
     string_split = string_split,
     tabulate_string = tabulate_string,
+    read_migration = read_migration,
     read_migrations = read_migrations,
+    list_migrations = list_migrations,
     string_starts = string_starts,
 }

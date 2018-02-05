@@ -36,6 +36,14 @@ box.spacer = require 'spacer'({
 })
 ```
 
+### Spacer options
+
+* `migrations` (required) - Path to migrations folder
+* `global_ft` (default is `true`) - Expose `F` and `T` variables to the global `_G` table (see [Fields](#Fields) and [Transformations](#Transformations) sections).
+* `automigrate` (default is `false`) - Automatically applies migrations after spacer:space() call without creating a migration file. Useful when changing schema a lot.
+* `keep_obsolete_spaces` (default is `false`) - do not track space removals
+* `keep_obsolete_indexes` (default is `false`) - do not track indexes removals
+* `down_migration_fail_on_impossible` (default is `true`) - Generate an `assert(false)` statement in a down migration when detecting new fields in format, so user can perform proper actions on a down migration.
 
 ## Define spaces
 
@@ -156,6 +164,62 @@ box.spacer:migrate_down(n)
 It accepts `n` - number of migrations to rollback (by default `n` is 1, i.e. roll back obly the latest migration).
 To rollback all migration just pass any huge number.
 
+
+## List migrations
+
+```lua
+box.spacer:list()
+```
+
+Returns list of migrations.
+```
+tarantool> box.spacer:list()
+---
+- - 1517144699_events.lua
+  - 1517228368_events_sequence.lua
+...
+
+tarantool> box.spacer:list(true)
+---
+- - ver: '1517144699'
+    filename: 1517144699_events.lua
+    name: events
+    path: ./migrations/1517144699_events.lua
+  - ver: '1517228368'
+    filename: 1517228368_events_sequence.lua
+    name: events_sequence
+    path: ./migrations/1517228368_events_sequence.lua
+...
+
+```
+
+### Options
+* `verbose` (default is false) - return verbose information about migrations. If false returns only a list of names.
+
+
+## Get migration
+
+```lua
+box.spacer:get(name)
+```
+
+Returns information about a migration in the following format:
+```
+tarantool> box.spacer:get('1517144699_events')
+---
+- ver: 1517144699
+  path: ./migrations/1517144699_events.lua
+  migration:
+    up: 'function: 0x40de9090'
+    down: 'function: 0x40de90b0'
+  name: events
+  filename: 1517144699_events.lua
+...
+```
+
+### Options
+* `name` (required) - Can be either a filename or version number or migration name.
+* `compile` (default is true) - Perform migration compilation. If false returns only the text of migration.
 
 # Fields
 
