@@ -236,6 +236,24 @@ box.space.space1:update(
 ```
 
 
+## Get current migration version
+
+```lua
+box.spacer:version()
+```
+
+Returns current migration's version number
+
+
+## Get current migration name
+
+```lua
+box.spacer:version_name()
+```
+
+Returns current migration's version name
+
+
 # Transformations
 
 You can easily transform a given tuple to a dictionary-like object and vice-a-versa.

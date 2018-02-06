@@ -285,6 +285,30 @@ local function list(self, verbose)
     return util.list_migrations(self.migrations_path, verbose)
 end
 
+---
+--- version function
+---
+local function version(self)
+    local t = box.space._schema:get({SCHEMA_KEY})
+    if t == nil then
+        return nil
+    end
+
+    return t[2]
+end
+
+---
+--- version_name function
+---
+local function version_name(self)
+    local t = box.space._schema:get({SCHEMA_KEY})
+    if t == nil then
+        return nil
+    end
+
+    return t[3]
+end
+
 
 local function _init_models_space(self)
     local sp = box.schema.create_space(SPACER_MODELS_SPACE, {if_not_exists = true})
@@ -443,6 +467,8 @@ else
             clear_schema = clear_schema,
             get = get,
             list = list,
+            version = version,
+            version_name = version_name,
         }
     })
     rawset(_G, '__spacer__', M)
