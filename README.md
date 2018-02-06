@@ -221,21 +221,6 @@ tarantool> box.spacer:get('1517144699_events')
 * `name` (required) - Can be either a filename or version number or migration name.
 * `compile` (default is true) - Perform migration compilation. If false returns only the text of migration.
 
-# Fields
-
-Space fields can be accessed by the global variable `F`, which is set by spacer
-or in the spacer directly (`box.spacer.F`):
-
-```lua
-box.space.space1:update(
-    {1},
-    {
-        {'=', F.object.name, 'John Watson'},
-    }
-)
-```
-
-
 ## Get current migration version
 
 ```lua
@@ -253,6 +238,20 @@ box.spacer:version_name()
 
 Returns current migration's version name
 
+
+# Fields
+
+Space fields can be accessed by the global variable `F`, which is set by spacer
+or in the spacer directly (`box.spacer.F`):
+
+```lua
+box.space.space1:update(
+    {1},
+    {
+        {'=', F.object.name, 'John Watson'},
+    }
+)
+```
 
 # Transformations
 
