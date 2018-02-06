@@ -89,12 +89,12 @@ Indexes parts must be defined using only field names.
 You can autogenerate migration by just running the following snippet in Tarantool console:
 
 ```lua
-box.spacer:makemigration('init_object', true)
+box.spacer:makemigration('init_object')
 ```
 
 There are 2 arguments to the `makemigration` method:
 1. Migration name (required)
-2. Autogenerate migration (default is `false`). If `false` then empty migration file is generated
+2. Autogenerate migration (default is `true`). If `false` then empty migration file is generated
 
 After executing this command a new migrations file will be generated under name `<timestamp>_<migration_name>.lua` inside your `migrations` folder:
 ```lua
