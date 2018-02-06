@@ -2,7 +2,7 @@ package = 'spacer'
 version = 'scm-1'
 source  = {
     url    = 'git://github.com/igorcoding/tarantool-spacer.git',
-    branch = 'master',
+    branch = 'v1',
 }
 description = {
     summary  = "Spacer for Tarantool. For managing spaces easily.",
