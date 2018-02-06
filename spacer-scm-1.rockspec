@@ -1,3 +1,5 @@
+-- SPACER V1 IS DEPRECATED. PLEASE UPGRADE TO V2+.
+
 package = 'spacer'
 version = 'scm-1'
 source  = {

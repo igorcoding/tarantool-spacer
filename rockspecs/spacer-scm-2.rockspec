@@ -1,8 +1,8 @@
 package = 'spacer'
 version = 'scm-2'
 source  = {
-    url    = 'git://github.com/igorcoding/tarantool-spacer.git',
-    branch = 'v2',
+    url = 'git://github.com/igorcoding/tarantool-spacer.git',
+    tag = 'master',
 }
 description = {
     summary  = "Tarantool Spacer. Automatic models migrations.",
