@@ -1,24 +1,10 @@
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
-project(zookeeper C)
+project(spacer)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
-
-# Find Tarantool
-set(TARANTOOL_FIND_REQUIRED ON)
-find_package(Tarantool)
-
-include_directories(${TARANTOOL_INCLUDE_DIRS})
-
-# Set CFLAGS
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC -O2")
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fPIC -O2 -Wall -Wextra")
-
-if (APPLE)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -undefined suppress -flat_namespace")
-endif(APPLE)
 
 # Build module
 add_subdirectory(spacer)
