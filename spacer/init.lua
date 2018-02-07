@@ -8,6 +8,7 @@ local inspect = require 'spacer.myinspect'
 local space_migration = require 'spacer.migration'
 local util = require 'spacer.util'
 local transformations = require 'spacer.transformations'
+local compat = require 'spacer.compat'
 
 local NULL = require 'msgpack'.NULL
 
@@ -315,10 +316,13 @@ local function _init_models_space(self)
     sp:format({
         {name = 'name', type = 'string'},
     })
+    local parts = compat.normalize_index_tuple_format({
+        {1, 'string'}
+    })
+    parts = compat.index_parts_from_normalized(parts)
+
     sp:create_index('primary', {
-        parts = {
-            {1, 'string'}
-        },
+        parts = parts,
         if_not_exists = true
     })
 

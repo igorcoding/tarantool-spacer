@@ -1,5 +1,37 @@
 local ver = _TARANTOOL
 
+
+local function compat_type(type)
+    type = string.lower(type)
+    if ver >= "1.7" then
+        if type == 'string' or type == 'str' then
+            return 'string'
+        end
+
+        if type == 'unsigned' or type =='uint' or type == 'num' then
+            return 'unsigned'
+        end
+
+        if type == 'integer' or type == 'int' then
+            return 'integer'
+        end
+    else
+        if type == 'string' or type == 'str' then
+            return 'str'
+        end
+
+        if type == 'unsigned' or type =='uint' or type == 'num' then
+            return 'num'
+        end
+
+        if type == 'integer' or type == 'int' then
+            return 'int'
+        end
+    end
+
+    return type
+end
+
 local function index_parts_from_fields(space_name, fields, f_extra)
     if fields == nil then
         if ver >= "1.7" then
@@ -16,7 +48,7 @@ local function index_parts_from_fields(space_name, fields, f_extra)
             local f_info = f_extra[p]
             if f_info ~= nil then
                 table.insert(part, f_info.fieldno)
-                table.insert(part, f_info.type)
+                table.insert(part, compat_type(f_info.type))
 
                 if ver >= "1.7.6" then
                     part.is_nullable = f_info.is_nullable
@@ -35,7 +67,7 @@ local function index_parts_from_fields(space_name, fields, f_extra)
             local f_info = f_extra[p]
             if f_info ~= nil then
                 table.insert(parts, f_info.fieldno)
-                table.insert(parts, f_info.type)
+                table.insert(parts, compat_type(f_info.type))
             else
                 error(string.format("Field %s.%s not found", space_name, p))
             end
@@ -67,7 +99,7 @@ local function normalize_index_tuple_format(format)
                 end
                 part = {
                     fieldno  = fieldno,
-                    ['type'] = p.type,
+                    ['type'] = compat_type(p.type),
                     is_nullable = p.is_nullable,
                     collation = p.collation
                 }
@@ -76,7 +108,7 @@ local function normalize_index_tuple_format(format)
                 -- but it can contain is_nullable and collation in a 'map' of each field
                 part = {
                     fieldno  = p[1],
-                    ['type'] = p[2],
+                    ['type'] = compat_type(p[2]),
                     is_nullable = p.is_nullable,
                     collation = p.collation
                 }
@@ -92,7 +124,7 @@ local function normalize_index_tuple_format(format)
         for i = 1, #format, 2 do
             table.insert(parts, {
                 fieldno  = format[i],
-                ['type'] = format[i + 1],
+                ['type'] = compat_type(format[i + 1]),
                 is_nullable = false,
                 collation = nil
             })
@@ -106,7 +138,7 @@ local function index_parts_from_normalized(normalized_parts)
     if ver >= "1.7" then
         local parts = {}
         for _, p in ipairs(normalized_parts) do
-            local part = {p.fieldno, p.type}
+            local part = {p.fieldno, compat_type(p.type)}
 
             if ver >= "1.7.6" then
                 part.is_nullable = p.is_nullable
@@ -120,7 +152,7 @@ local function index_parts_from_normalized(normalized_parts)
         local parts = {}
         for _, p in ipairs(normalized_parts) do
             table.insert(parts, p.fieldno)
-            table.insert(parts, p.type)
+            table.insert(parts, compat_type(p.type))
         end
         return parts
     end
