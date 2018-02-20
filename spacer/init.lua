@@ -263,11 +263,18 @@ end
 local function makemigration(self, ...) self:_makemigration(...) end
 
 ---
+--- models_space function
+---
+local function models_space(self)
+    return box.space[SPACER_MODELS_SPACE]
+end
+
+---
 --- clear_schema function
 ---
 local function clear_schema(self)
     box.space._schema:delete({SCHEMA_KEY})
-    self.models_space:truncate()
+    self.models_space():truncate()
 end
 
 ---
@@ -313,6 +320,8 @@ end
 
 
 local function _init_models_space(self)
+    if box.cfg.read_only then return end
+
     local sp = box.schema.create_space(SPACER_MODELS_SPACE, {if_not_exists = true})
     sp:format({
         {name = 'name', type = 'string'},
@@ -360,7 +369,6 @@ else
         keep_obsolete_spaces = NULL,
         keep_obsolete_indexes = NULL,
         down_migration_fail_on_impossible = NULL,
-        models_space = NULL,
         __models__ = {},
         F = {},
         F_FULL = {},
@@ -454,7 +462,7 @@ else
                 rawset(_G, 'T', self.T)
             end
 
-            self.models_space = _init_models_space(self)
+            _init_models_space(self)
 
             return self
         end,
