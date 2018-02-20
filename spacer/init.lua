@@ -478,6 +478,7 @@ else
             migrate_down = migrate_down,
             makemigration = makemigration,
             clear_schema = clear_schema,
+            models_space = models_space,
             get = get,
             list = list,
             version = version,
