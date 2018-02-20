@@ -452,10 +452,10 @@ local function spaces_migration(spacer, spaces_decl)
             local f, f_extra = generate_field_info(space_format)
             local up, _ = indexes_migration(spacer, space_name, space_indexes, f, f_extra)
             stmt:up_apply(up)
-            stmt:up('box.space.%s:replace({%s})', spacer.models_space.name, inspect(space_name))
+            stmt:up('box.space.%s:replace({%s})', spacer.models_space().name, inspect(space_name))
 
             stmt:down('box.space.%s:drop()', space_name)
-            stmt:down('box.space.%s:delete({%s})', spacer.models_space.name, inspect(space_name))
+            stmt:down('box.space.%s:delete({%s})', spacer.models_space().name, inspect(space_name))
         else
             -- if space already exists
             local sp_tuple = box.space._vspace.index.name:get({space_name})
@@ -483,14 +483,14 @@ local function spaces_migration(spacer, spaces_decl)
 
     if not spacer.keep_obsolete_spaces then
         for k, sp in pairs(box.space) do
-            if type(k) == 'string' and spacer.models_space:get({k}) then
+            if type(k) == 'string' and spacer.models_space():get({k}) then
                 if not declared_spaces[k] then
                     -- space drop
                     local space_name = k
                     local space_format = sp:format()
                     local space_opts = build_opts_for_space(spacer, space_name)
                     stmt:up('box.space.%s:drop()', space_name)
-                    stmt:up('box.space.%s:delete({%s})', spacer.models_space.name, inspect(space_name))
+                    stmt:up('box.space.%s:delete({%s})', spacer.models_space().name, inspect(space_name))
                     stmt:down('box.schema.create_space(%s, %s)', inspect(space_name), inspect(space_opts))
                     stmt:down('box.space.%s:format(%s)', space_name, inspect(space_format))
 
@@ -506,7 +506,7 @@ local function spaces_migration(spacer, spaces_decl)
                             stmt:down('box.space.%s:create_index(%s, %s)', space_name, inspect(ind.name), inspect(ind_opts))
                         end
                     end
-                    stmt:down('box.space.%s:replace({%s})', spacer.models_space.name, inspect(space_name))
+                    stmt:down('box.space.%s:replace({%s})', spacer.models_space().name, inspect(space_name))
                 end
             end
         end
