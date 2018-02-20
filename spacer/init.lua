@@ -1,4 +1,5 @@
 local clock = require 'clock'
+local errno = require 'errno'
 local fio = require 'fio'
 local fun = require 'fun'
 local log = require 'log'

@@ -30,7 +30,7 @@ local function tnt_prepare(cfg_args)
         cfg_args['work_dir']   = dir
         cfg_args['wal_dir']    = dir
         cfg_args['snap_dir']   = dir
-        cfg_args['vinyl']      = {}
+        --cfg_args['vinyl']      = {}
         cfg_args['logger']     = fio.pathjoin(dir, 'tarantool.log')
     end
 
