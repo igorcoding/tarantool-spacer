@@ -99,7 +99,7 @@ local function read_migration(path, name, compile)
                     local err
                     data, err = loadstring(data)
                     if data == nil then
-                        error(string.format("Error compiling migration '%s': \n%s", filename, err))
+                        error(string.format("Error compiling migration '%s': \n%s", m.filename, err))
                     end
 
                     data = data()
