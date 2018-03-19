@@ -26,7 +26,7 @@ local function spacer_up(t, spacer, ...)
 end
 
 local function spacer_down(t, spacer, ...)
-    local err = spacer:migrate_down()
+    local err = spacer:migrate_down(...)
     if err ~= nil then
         t:fail(string.format('migrate_down failed: %s', json.encode(err)))
     else
@@ -353,7 +353,7 @@ local function test__no_check_alter(t, spacer)
     -- recreating
     fiber.sleep(1)  -- just to make sure migrations have different ids
     spacer:makemigration('object_init2', {check_alter = false})
-    box.space.object:drop()
+
     spacer_up(t, spacer)
 
     local sp = box.space.object
@@ -367,8 +367,35 @@ local function test__no_check_alter(t, spacer)
         { fieldno = 1, type = 'unsigned' }
     })
 
-    spacer_down(t, spacer)
+    pcall(spacer.migrate_down, spacer, 100)  -- allow to fail as there are 2 identical migrations
     t:isnil(box.space.object, 'object deleted')
+end
+
+
+local function test__migrate_dummy(t, spacer)
+    t:plan(3)
+
+    local fmt = {
+        { name = 'id', type = 'unsigned' }
+    }
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' } }
+        }
+    })
+
+    fiber.sleep(1)  -- just to make sure migrations have different ids
+    spacer:makemigration('object_init')
+
+    t:is(spacer:version_name(), nil, 'version is nil before migrate_dummy')
+    spacer:migrate_dummy('object_init')
+
+    t:is(spacer:version_name(), 'object_init', 'version up')
+    t:is(spacer:models_space():select()[1][1], 'object', 'space registered')
+
+    spacer:clear_schema()
 end
 
 local function main()
@@ -387,6 +414,7 @@ local function main()
     tap.test('test__drop_rtree_index', test__drop_rtree_index, spacer)
     tap.test('test__drop_space', test__drop_space, spacer)
     tap.test('test__no_check_alter', test__no_check_alter, spacer)
+    tap.test('test__migrate_dummy', test__migrate_dummy, spacer)
 
     tnt.finish()
     os.exit(0)

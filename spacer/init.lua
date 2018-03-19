@@ -74,6 +74,17 @@ local function space_drop(self, name)
     self.T[name] = nil
 end
 
+local function _schema_get_version()
+    return box.space._schema:get({SCHEMA_KEY})
+end
+
+local function _schema_del_version()
+    return box.space._schema:delete({SCHEMA_KEY})
+end
+
+local function _schema_set_version(ver, name)
+    return box.space._schema:replace({SCHEMA_KEY, ver, name})
+end
 
 ---
 --- _migrate_one_up function
@@ -99,7 +110,7 @@ local function migrate_up(self, _n)
         error('n must be a number or nil')
     end
 
-    local ver_t = box.space._schema:get({SCHEMA_KEY})
+    local ver_t = _schema_get_version()
     local ver, name
     if ver_t ~= nil then
         ver = ver_t[2]
@@ -128,7 +139,7 @@ local function migrate_up(self, _n)
             }
         end
 
-        box.space._schema:replace({SCHEMA_KEY, m.ver, m.name})
+        _schema_set_version(m.ver, m.name)
         log.info('Applied migration "%s"', m.filename)
     end
 
@@ -164,7 +175,7 @@ local function migrate_down(self, _n)
         n = 1
     end
 
-    local ver_t = box.space._schema:get({SCHEMA_KEY})
+    local ver_t = _schema_get_version()
     local ver, name
     if ver_t ~= nil then
         ver = ver_t[2]
@@ -195,9 +206,9 @@ local function migrate_down(self, _n)
 
         local prev_migration = migrations[i + 1]
         if prev_migration == nil then
-            box.space._schema:delete({SCHEMA_KEY})
+            _schema_del_version()
         else
-            box.space._schema:replace({SCHEMA_KEY, prev_migration.ver, prev_migration.name})
+            _schema_set_version(prev_migration.ver, prev_migration.name)
         end
         log.info('Rolled back migration "%s"', m.filename)
         n = n - 1
@@ -279,7 +290,7 @@ end
 --- clear_schema function
 ---
 local function clear_schema(self)
-    box.space._schema:delete({SCHEMA_KEY})
+    _schema_del_version()
     self.models_space():truncate()
 end
 
@@ -304,7 +315,7 @@ end
 --- version function
 ---
 local function version(self)
-    local t = box.space._schema:get({SCHEMA_KEY})
+    local t = _schema_get_version()
     if t == nil then
         return nil
     end
@@ -316,12 +327,29 @@ end
 --- version_name function
 ---
 local function version_name(self)
-    local t = box.space._schema:get({SCHEMA_KEY})
+    local t = _schema_get_version()
     if t == nil then
         return nil
     end
 
     return t[3]
+end
+
+---
+--- migrate_dummy function
+---
+local function migrate_dummy(self, name)
+    local m = self:get(name, false)
+    if m == nil then
+        return error(string.format('migration %s not found', tostring(name)))
+    end
+
+    _schema_set_version(m.ver, m.name)
+    box.begin()
+    for name, _ in pairs(self.__models__) do
+        self:models_space():replace({name})
+    end
+    box.commit()
 end
 
 
@@ -482,6 +510,7 @@ else
             space_drop = space_drop,
             migrate_up = migrate_up,
             migrate_down = migrate_down,
+            migrate_dummy = migrate_dummy,
             makemigration = makemigration,
             clear_schema = clear_schema,
             models_space = models_space,

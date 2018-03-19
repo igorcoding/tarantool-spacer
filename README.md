@@ -220,7 +220,7 @@ tarantool> box.spacer:get('1517144699_events')
 ```
 
 ### Options
-* `name` (required) - Can be either a filename or version number or migration name.
+* `name` (required) - Can be either a filename or version number or full migration name.
 * `compile` (default is true) - Perform migration compilation. If false returns only the text of migration.
 
 ## Get current migration version
@@ -240,6 +240,16 @@ box.spacer:version_name()
 
 Returns current migration's version name
 
+## migrate_dummy
+
+You can force spacer to think that the specified migration is already migrated by setting the appropriate `_schema` space key and registering in `_spacer_models` space all models, registered by calling `spacer:space(...)` function. Convinient when you are migrating an already working project to using spacer.
+
+```lua
+box.spacer:migrate_dummy(name)
+```
+
+### Options
+* `name` (required) - Can be either a filename or version number or full migration name.
 
 # Fields
 
