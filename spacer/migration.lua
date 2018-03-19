@@ -424,7 +424,11 @@ local function run_format_changes(spacer, stmt, space_name, format_changes, inde
     end
 end
 
-local function spaces_migration(spacer, spaces_decl)
+local function spaces_migration(spacer, spaces_decl, check_alter)
+    if check_alter == nil then
+        check_alter = true
+    end
+
     local stmt = stmt_obj.new()
 
     local declared_spaces = {}
@@ -440,7 +444,7 @@ local function spaces_migration(spacer, spaces_decl)
 
         local space_exists = box.space[space_name] ~= nil
 
-        if not space_exists then
+        if not space_exists or not check_alter then
             local space_opts_str = 'nil'
             if space_opts ~= nil then
                 space_opts_str = inspect(space_opts)
@@ -450,7 +454,7 @@ local function spaces_migration(spacer, spaces_decl)
             stmt:up('box.space.%s:format(%s)', space_name, inspect(space_format))
 
             local f, f_extra = generate_field_info(space_format)
-            local up, _ = indexes_migration(spacer, space_name, space_indexes, f, f_extra)
+            local up, _ = indexes_migration(spacer, space_name, space_indexes, f, f_extra, check_alter)
             stmt:up_apply(up)
             stmt:up('box.space.%s:replace({%s})', spacer.models_space().name, inspect(space_name))
 

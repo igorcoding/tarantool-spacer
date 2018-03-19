@@ -209,22 +209,28 @@ local function migrate_down(self, _n)
     return nil
 end
 
-
 ---
 --- makemigration function
 ---
-local function _makemigration(self, name, autogenerate, nofile)
+local function _makemigration(self, name, opts)
     assert(name ~= nil, 'Migration name is required')
-    if autogenerate == nil then
-        autogenerate = true
+    if opts == nil then opts = {} end
+
+    if opts.autogenerate == nil then
+        opts.autogenerate = true
     end
+
+    if opts.check_alter == nil then
+        opts.check_alter = true
+    end
+
     local date = clock.time()
 
     local requirements_body = ''
     local up_body = ''
     local down_body = ''
-    if autogenerate then
-        local migration = space_migration.spaces_migration(self, self.__models__)
+    if opts.autogenerate then
+        local migration = space_migration.spaces_migration(self, self.__models__, opts.check_alter)
         requirements_body = table.concat(
             fun.iter(migration.requirements):map(
                 function(key, r)
@@ -254,7 +260,7 @@ return {
 }
 ]], name, date, os.date('%x %X', date), requirements_body, up_body, down_body)
 
-    if not nofile then
+    if not opts.nofile then
         local path = fio.pathjoin(self.migrations_path, string.format('%d_%s.lua', date, name))
         fileio.write_to_file(path, migration_body)
     end

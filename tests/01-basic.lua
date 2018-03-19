@@ -331,6 +331,46 @@ local function test__drop_space(t, spacer)
     spacer_up(t, spacer)
 end
 
+
+local function test__no_check_alter(t, spacer)
+    t:plan(12)
+
+    local fmt = {
+        { name = 'id', type = 'unsigned' }
+    }
+    spacer:space({
+        name = 'object',
+        format = fmt,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id' } }
+        }
+    })
+
+    fiber.sleep(1)  -- just to make sure migrations have different ids
+    spacer:makemigration('object_init')
+    spacer_up(t, spacer)
+
+    -- recreating
+    fiber.sleep(1)  -- just to make sure migrations have different ids
+    spacer:makemigration('object_init2', {check_alter = false})
+    box.space.object:drop()
+    spacer_up(t, spacer)
+
+    local sp = box.space.object
+    t:isnt(sp, nil, 'object space created')
+    t:is_deeply(sp:format(), fmt, 'format correct')
+    t:isnt(sp.index.primary, nil, 'primary index created')
+    t:is(string.upper(sp.index.primary.type), 'TREE', 'type correct')
+    t:is(sp.index.primary.unique, true, 'unique correct')
+
+    cmp_parts(t, sp.index.primary.parts, {
+        { fieldno = 1, type = 'unsigned' }
+    })
+
+    spacer_down(t, spacer)
+    t:isnil(box.space.object, 'object deleted')
+end
+
 local function main()
     tnt.cfg{}
 
@@ -346,6 +386,7 @@ local function main()
     tap.test('test__add_rtree_index', test__add_rtree_index, spacer)
     tap.test('test__drop_rtree_index', test__drop_rtree_index, spacer)
     tap.test('test__drop_space', test__drop_space, spacer)
+    tap.test('test__no_check_alter', test__no_check_alter, spacer)
 
     tnt.finish()
     os.exit(0)
