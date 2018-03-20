@@ -11,13 +11,15 @@ local folder_perms = bit.bor(modes.S_IRUSR, modes.S_IWUSR, modes.S_IXUSR,
                              modes.S_IRGRP, modes.S_IWGRP, modes.S_IXGRP,
                              modes.S_IROTH,                modes.S_IXOTH)
 
- function fileio.get_mode(file_path)
+
+function fileio.get_mode(file_path)
     local stat = fio.stat(file_path)
     if stat:is_dir() then
         return 'directory'
     end
     return 'file'
 end
+
 
 local function merge_tables(t, ...)
     for _, tt in ipairs({...}) do
@@ -27,6 +29,7 @@ local function merge_tables(t, ...)
     end
     return t
 end
+
 
 function fileio.listdir(path)
     local files = {}
@@ -47,6 +50,7 @@ function fileio.listdir(path)
     return files
 end
 
+
 function fileio.read_file(filepath)
     local fh = fio.open(filepath, {'O_RDONLY'})
     if not fh then
@@ -64,6 +68,7 @@ function fileio.read_file(filepath)
     return data
 end
 
+
 function fileio.write_to_file(filepath, data)
     local local_perms = perms
 
@@ -75,6 +80,7 @@ function fileio.write_to_file(filepath, data)
     fh:write(data)
     fh:close()
 end
+
 
 function fileio.mkdir(path)
     local ok = fio.mkdir(path, folder_perms)

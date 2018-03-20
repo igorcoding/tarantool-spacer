@@ -183,13 +183,11 @@ tarantool> box.spacer:list()
 
 tarantool> box.spacer:list(true)
 ---
-- - ver: '1517144699'
+- - version: '1517144699_events'
     filename: 1517144699_events.lua
-    name: events
     path: ./migrations/1517144699_events.lua
-  - ver: '1517228368'
+  - version: '1517228368_events_sequence'
     filename: 1517228368_events_sequence.lua
-    name: events_sequence
     path: ./migrations/1517228368_events_sequence.lua
 ...
 
@@ -209,18 +207,17 @@ Returns information about a migration in the following format:
 ```
 tarantool> box.spacer:get('1517144699_events')
 ---
-- ver: 1517144699
+- version: 1517144699_events
   path: ./migrations/1517144699_events.lua
   migration:
     up: 'function: 0x40de9090'
     down: 'function: 0x40de90b0'
-  name: events
   filename: 1517144699_events.lua
 ...
 ```
 
 ### Options
-* `name` (required) - Can be either a filename or version number or full migration name.
+* `name` (optional) - Can be either a filename or migration version. If not specified - the latest migration is returned
 * `compile` (default is true) - Perform migration compilation. If false returns only the text of migration.
 
 ## Get current migration version
@@ -229,16 +226,7 @@ tarantool> box.spacer:get('1517144699_events')
 box.spacer:version()
 ```
 
-Returns current migration's version number
-
-
-## Get current migration name
-
-```lua
-box.spacer:version_name()
-```
-
-Returns current migration's version name
+Returns current migration's version
 
 ## migrate_dummy
 
