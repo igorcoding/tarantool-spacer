@@ -76,7 +76,11 @@ local function index_parts_from_fields(space_name, fields, f_extra)
     end
 end
 
-local function normalize_index_tuple_format(format)
+local function normalize_index_tuple_format(format, is_raw_tuple)
+    if is_raw_tuple == nil then
+        is_raw_tuple = false
+    end
+
     if format == nil then
         return nil
     end
@@ -106,8 +110,12 @@ local function normalize_index_tuple_format(format)
             else
                 -- <1.7.6 format { {1, 'unsigned'}, {2, 'string'}, ... }
                 -- but it can contain is_nullable and collation in a 'map' of each field
+                local fieldno = p[1]
+                if is_raw_tuple then
+                    fieldno = fieldno + 1
+                end
                 part = {
-                    fieldno  = p[1],
+                    fieldno  = fieldno,
                     ['type'] = compat_type(p[2]),
                     is_nullable = p.is_nullable,
                     collation = p.collation

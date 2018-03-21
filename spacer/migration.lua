@@ -129,7 +129,7 @@ local function get_changed_opts_for_index(spacer, space_name, existing_index, in
 
     local parts_changed = false
     assert(ind_opts.parts ~= nil, 'index parts must not be nil')
-    local old_parts = compat.normalize_index_tuple_format(index_tuple[6])
+    local old_parts = compat.normalize_index_tuple_format(index_tuple[6], true)
     local new_parts = compat.normalize_index_tuple_format(ind_opts.parts)
 
     if #old_parts ~= #new_parts then

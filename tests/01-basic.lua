@@ -4,9 +4,28 @@ package.path = "../?.lua;../?/init.lua;./?/init.lua;" .. package.path
 package.cpath = "../?.so;../?.dylib;./?.so;./?.dylib;" .. package.cpath
 
 local fiber = require 'fiber'
+local fio = require 'fio'
 local json = require 'json'
 local tap = require 'tap'
 local tnt = require 'tnt'
+
+local function rmtree(path)
+    for _, f in ipairs(fio.listdir(path)) do
+        local f_path = fio.pathjoin(path, f)
+        local f_stat = fio.stat(f_path)
+
+        if f_stat:is_dir() then
+            rmtree(f_path)
+        else
+            fio.unlink(f_path)
+        end
+    end
+end
+
+local function recreate_migrations()
+    rmtree('./migrations')
+    fio.mktree('./migrations')
+end
 
 local function cmp_parts(t, got, expected)
     t:is(#got, #expected, 'lengths are same')
@@ -398,11 +417,51 @@ local function test__migrate_dummy(t, spacer)
     spacer:clear_schema()
 end
 
+
+local function test__old_format(t, spacer)
+    recreate_migrations()
+    spacer:clear_schema()
+    t:plan(2)
+
+    local s = box.schema.create_space('object')
+    local f = {
+        { name = 'id', type = 'unsigned' },
+        { name = 'name', type = 'string' },
+    }
+
+    s:format(f)
+    s:create_index('primary', {
+        unique = true,
+        parts = {
+            { 1, 'unsigned' }, { 2, 'string' }
+        }
+    })
+    spacer:space({
+        name = 'object',
+        format = f,
+        indexes = {
+            { name = 'primary', type = 'tree', unique = true, parts = { 'id', 'name' } }
+        }
+    })
+
+    fiber.sleep(1)  -- just to make sure migrations have different ids
+    spacer:makemigration('object_init', {check_alter = false})
+    spacer:migrate_dummy('object_init')
+
+    local res = spacer:_makemigration('test')
+    res = res:gsub('\n', '')
+    local up_body = res:match('up%s*=%s*function%(%)(.-)end'):gsub('%s+', '')
+    local down_body = res:match('down%s*=%s*function%(%)(.-)end'):gsub('%s+', '')
+
+    t:is(up_body, '', 'up body is empty')
+    t:is(down_body, '', 'down body is empty')
+end
+
 local function main()
     tnt.cfg{}
 
     local spacer = require 'spacer'({
-        migrations = '.',
+        migrations = './migrations',
         down_migration_fail_on_impossible = false,
     })
 
@@ -415,7 +474,9 @@ local function main()
     tap.test('test__drop_space', test__drop_space, spacer)
     tap.test('test__no_check_alter', test__no_check_alter, spacer)
     tap.test('test__migrate_dummy', test__migrate_dummy, spacer)
+    tap.test('test__old_format', test__old_format, spacer)
 
+    rmtree('./migrations')
     tnt.finish()
     os.exit(0)
 end
