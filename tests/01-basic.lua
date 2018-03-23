@@ -104,6 +104,7 @@ end
 
 
 local function test__add_field_name_and_index(t, spacer)
+    recreate_migrations()
     t:plan(15)
 
     spacer_create_space_object(spacer)
@@ -352,7 +353,8 @@ end
 
 
 local function test__no_check_alter(t, spacer)
-    t:plan(12)
+    recreate_migrations()
+    t:plan(11)
 
     local fmt = {
         { name = 'id', type = 'unsigned' }
@@ -372,7 +374,7 @@ local function test__no_check_alter(t, spacer)
     -- recreating
     fiber.sleep(1)  -- just to make sure migrations have different ids
     spacer:makemigration('object_init2', {check_alter = false})
-
+    box.space.object:drop()
     spacer_up(t, spacer)
 
     local sp = box.space.object
@@ -392,6 +394,8 @@ end
 
 
 local function test__migrate_dummy(t, spacer)
+    recreate_migrations()
+    spacer:clear_schema()
     t:plan(3)
 
     local fmt = {
@@ -408,10 +412,10 @@ local function test__migrate_dummy(t, spacer)
     fiber.sleep(1)  -- just to make sure migrations have different ids
     spacer:makemigration('object_init')
 
-    t:is(spacer:version_name(), nil, 'version is nil before migrate_dummy')
+    t:is(spacer:version(), nil, 'version is nil before migrate_dummy')
     spacer:migrate_dummy('object_init')
 
-    t:is(spacer:version_name(), 'object_init', 'version up')
+    t:is(spacer:version(true).name, 'object_init', 'version up')
     t:is(spacer:models_space():select()[1][1], 'object', 'space registered')
 
     spacer:clear_schema()
@@ -481,4 +485,7 @@ local function main()
     os.exit(0)
 end
 
-main()
+xpcall(main, function(err)
+    print(err .. '\n' .. debug.traceback())
+    os.exit(1)
+end)

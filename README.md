@@ -18,6 +18,42 @@ Tarantool Spacer. Automatic models migrations.
     * **[IMPORTANT] `type` and `name` changes are prohibited**
 
 
+# Installation
+
+Use `luarocks` to install this package by one of the following rockspec from the `rockspecs` folders:
+* `rockspecs/spacer-scm-2.rockspec` - Installs current version 2 from `master` branch
+* `rockspecs/spacer-2.0.1-1.rockspec` - Installs tagged version 2 from `v2.0.1` tag
+
+There is also a `rockspecs/spacer-scm-1.rockspec` which installs an old **v1** version of spacer (from branch `v1`). This is left here for compatibility reasons for projects that still use spacer v1. Please do not use this version as it is not supported anymore.
+
+Spacer depends on 2 libraries:
+* `inspect` - available from rocks.moonscript.org
+* `moonwalker` - available from rocks.tarantool.org
+
+So you shold put the following to your `~/.luarocks/config.lua` file:
+```lua
+rocks_servers = {
+    [[http://rocks.tarantool.org]],
+    [[https://rocks.moonscript.org]],
+}
+```
+
+And after that you can run
+
+```
+luarocks install https://raw.githubusercontent.com/igorcoding/tarantool-spacer/master/rockspecs/spacer-scm-2.rockspec
+```
+
+to install from master
+
+or
+
+```
+luarocks install https://raw.githubusercontent.com/igorcoding/tarantool-spacer/master/rockspecs/spacer-2.0.1-1.rockspec
+```
+
+to install from the tag.
+
 
 # Usage
 ## Initialize
@@ -183,13 +219,11 @@ tarantool> box.spacer:list()
 
 tarantool> box.spacer:list(true)
 ---
-- - ver: '1517144699'
+- - version: '1517144699_events'
     filename: 1517144699_events.lua
-    name: events
     path: ./migrations/1517144699_events.lua
-  - ver: '1517228368'
+  - version: '1517228368_events_sequence'
     filename: 1517228368_events_sequence.lua
-    name: events_sequence
     path: ./migrations/1517228368_events_sequence.lua
 ...
 
@@ -209,36 +243,29 @@ Returns information about a migration in the following format:
 ```
 tarantool> box.spacer:get('1517144699_events')
 ---
-- ver: 1517144699
+- version: 1517144699_events
   path: ./migrations/1517144699_events.lua
   migration:
     up: 'function: 0x40de9090'
     down: 'function: 0x40de90b0'
-  name: events
   filename: 1517144699_events.lua
 ...
 ```
 
 ### Options
-* `name` (required) - Can be either a filename or version number or full migration name.
+* `name` (optional) - Can be either a filename or migration version. If not specified - the latest migration is returned
 * `compile` (default is true) - Perform migration compilation. If false returns only the text of migration.
 
 ## Get current migration version
 
-```lua
-box.spacer:version()
+```
+tarantool> box.spacer:version()
+---
+- 1517144699_events
+...
 ```
 
-Returns current migration's version number
-
-
-## Get current migration name
-
-```lua
-box.spacer:version_name()
-```
-
-Returns current migration's version name
+Returns current migration's version
 
 ## migrate_dummy
 
@@ -250,6 +277,24 @@ box.spacer:migrate_dummy(name)
 
 ### Options
 * `name` (required) - Can be either a filename or version number or full migration name.
+
+# Migrating a project to using spacer
+
+In order to use spacer in an already running project you will need to do the following:
+
+1. Initialize spacer.
+2. Define all your spaces you want to track by spacer by using `spacer:space()` function as usual.
+3. Create a non-altering migration (meaning that it will assume that spaces does not exist yet) by calling
+```
+spacer:makemigration(<migration_name>, {check_alter = false})
+```
+4. Force-apply migration without actually calling it by using
+```
+spacer:migrate_dummy(<migration_name>)
+```
+5. That's all
+
+After that you can make any changes to the spaces delcarations and track those changes my calling `spacer:makemigration()` function normally and applying migrations with `spacer:migrate_up()` as usual from now on.
 
 # Fields
 

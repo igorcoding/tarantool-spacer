@@ -1,24 +1,9 @@
 local fio = require 'fio'
 local fun = require 'fun'
 local fileio = require 'spacer.fileio'
+local lversion = require 'spacer.version'
 
-
-local function copy_table(src)
-    local t = {}
-    for k, v in pairs(src) do
-        t[k] = v
-    end
-    return t
-end
-
-local function make_mixin(src, mixin)
-    for k, v in pairs(src) do
-        if mixin[k] == nil then
-            mixin[k] = v
-        end
-    end
-    return mixin
-end
+local NULL = require 'msgpack'.NULL
 
 local function string_split(inputstr, sep)
     if sep == nil then
@@ -59,7 +44,6 @@ local function compile_migration(data)
     return loadstring(data)
 end
 
-
 local function _list_migration_files(path)
     local res = {}
     local files = fileio.listdir(path)
@@ -67,11 +51,10 @@ local function _list_migration_files(path)
         if f.mode == 'file' then
             local filename = fio.basename(f.path)
             local filename_no_ext = fio.basename(f.path, '.lua')
-            local m_ver, m_name = string.match(filename_no_ext, '(%d+)_(.+)')
-            if m_ver ~= nil and m_name ~= nil then
+            local version = lversion.parse(filename_no_ext)
+            if version ~= nil then
                 table.insert(res, {
-                    ver = tonumber(m_ver),
-                    name = m_name,
+                    version = version,
                     path = f.path,
                     filename = filename
                 })
@@ -83,17 +66,18 @@ local function _list_migration_files(path)
 end
 
 
-local function read_migration(path, name, compile)
+local function read_migration(path, version, compile)
     if compile == nil then
         compile = true
     end
 
-    assert(name ~= nil, 'Name is required')
+    assert(version ~= nil, 'version is required')
 
     for _, m in ipairs(_list_migration_files(path)) do
-        if tostring(m.ver) == name
-            or m.name == name
-            or m.filename == name then
+        if tostring(m.version) == version
+            or m.filename == version
+            or m.version.ts == tonumber(version)
+            or m.version.name == version then
                 local data = fileio.read_file(m.path)
                 if compile then
                     local err
@@ -106,6 +90,7 @@ local function read_migration(path, name, compile)
                 end
 
                 m.migration = data
+                m.version = tostring(m.version)
                 return m
         end
     end
@@ -117,11 +102,11 @@ end
 local function list_migrations(path, verbose)
     local res = {}
 
-    local files = fileio.listdir(path)
     for _, m in ipairs(_list_migration_files(path)) do
         if not verbose then
             table.insert(res, m.filename)
         else
+            m.version = tostring(m.version)
             table.insert(res, m)
         end
     end
@@ -131,6 +116,10 @@ end
 
 
 local function read_migrations(path, direction, from_migration, n)
+    if from_migration ~= nil then
+        from_migration = lversion.parse(from_migration)
+    end
+
     local migrations = {}
     local files = _list_migration_files(path)
 
@@ -139,9 +128,9 @@ local function read_migrations(path, direction, from_migration, n)
     end
 
     for _, m in ipairs(files) do
-        local cond = from_migration == nil or m.ver > from_migration
+        local cond = from_migration == nil or m.version > from_migration
         if direction == 'down' then
-            cond = from_migration == nil or m.ver <= from_migration
+            cond = from_migration == nil or m.version <= from_migration
         end
         if cond then
             local data = fileio.read_file(m.path)
@@ -160,18 +149,22 @@ local function read_migrations(path, direction, from_migration, n)
     return migrations
 end
 
-local function string_starts(String,Start)
-    return string.sub(String,1,string.len(Start))==Start
- end
+
+local function check_version_exists(path, ts, name)
+    local version = lversion.new(ts, name)
+    for _, m in ipairs(_list_migration_files(path)) do
+        if m.version == version or m.version.ts == ts or m.version.name == name then
+            error(string.format('Version with timestamp %d or name %s already exists', ts, name))
+        end
+    end
+end
 
 
 return {
-    copy_table = copy_table,
-    make_mixin = make_mixin,
     string_split = string_split,
     tabulate_string = tabulate_string,
     read_migration = read_migration,
     read_migrations = read_migrations,
     list_migrations = list_migrations,
-    string_starts = string_starts,
+    check_version_exists = check_version_exists,
 }

@@ -1,7 +1,5 @@
-local msgpack = require 'msgpack'
-
 local compat = require 'spacer.compat'
-local inspect = require 'spacer.myinspect'
+local inspect = require 'spacer.inspect'
 local ops = require 'spacer.ops'
 local stmt_obj = require 'spacer.stmt'
 local util = require 'spacer.util'

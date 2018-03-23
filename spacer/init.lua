@@ -4,12 +4,13 @@ local fio = require 'fio'
 local fun = require 'fun'
 local log = require 'log'
 
+local compat = require 'spacer.compat'
 local fileio = require 'spacer.fileio'
-local inspect = require 'spacer.myinspect'
+local inspect = require 'spacer.inspect'
 local space_migration = require 'spacer.migration'
 local util = require 'spacer.util'
 local transformations = require 'spacer.transformations'
-local compat = require 'spacer.compat'
+local lversion = require 'spacer.version'
 
 local NULL = require 'msgpack'.NULL
 
@@ -74,16 +75,33 @@ local function space_drop(self, name)
     self.T[name] = nil
 end
 
-local function _schema_get_version()
-    return box.space._schema:get({SCHEMA_KEY})
+local function _schema_set_version(version)
+    version = tostring(version)
+    return box.space._schema:replace({SCHEMA_KEY, version})
 end
 
 local function _schema_del_version()
     return box.space._schema:delete({SCHEMA_KEY})
 end
 
-local function _schema_set_version(ver, name)
-    return box.space._schema:replace({SCHEMA_KEY, ver, name})
+local function _schema_get_version_tuple()
+    local t = box.space._schema:get({SCHEMA_KEY})
+    if t == nil then return nil end
+
+    if #t > 2 then -- contains version and name separately
+        local version = string.format('%s_%s', t[2], t[3])
+        return _schema_set_version(version)
+    end
+
+    return t
+end
+
+local function _schema_get_version()
+    local t = _schema_get_version_tuple()
+    if t == nil then
+        return nil
+    end
+    return t[2]
 end
 
 ---
@@ -110,20 +128,11 @@ local function migrate_up(self, _n)
         error('n must be a number or nil')
     end
 
-    local ver_t = _schema_get_version()
-    local ver, name
-    if ver_t ~= nil then
-        ver = ver_t[2]
-        name = ver_t[3]
-    end
-
-    local migrations = util.read_migrations(self.migrations_path, 'up', ver, n)
+    local version = _schema_get_version()
+    local migrations = util.read_migrations(self.migrations_path, 'up', version, n)
 
     if #migrations == 0 then
-        if name == nil then
-            name = 'nil'
-        end
-        log.info('No migrations to apply. Last migration: %s_%s', inspect(ver), name)
+        log.info('No migrations to apply. Last migration: %s', inspect(version))
         return nil
     end
 
@@ -132,14 +141,13 @@ local function migrate_up(self, _n)
         if not ok then
             log.error('Error running migration %s: %s', m.filename, err)
             return {
-                version = m.ver,
-                name = m.name,
+                version = m.version,
                 migration = m.filename,
                 error = err
             }
         end
 
-        _schema_set_version(m.ver, m.name)
+        _schema_set_version(m.version)
         log.info('Applied migration "%s"', m.filename)
     end
 
@@ -175,20 +183,11 @@ local function migrate_down(self, _n)
         n = 1
     end
 
-    local ver_t = _schema_get_version()
-    local ver, name
-    if ver_t ~= nil then
-        ver = ver_t[2]
-        name = ver_t[3]
-    end
-
-    local migrations = util.read_migrations(self.migrations_path, 'down', ver, n + 1)
+    local version = _schema_get_version()
+    local migrations = util.read_migrations(self.migrations_path, 'down', version, n + 1)
 
     if #migrations == 0 then
-        if name == nil then
-            name = 'nil'
-        end
-        log.info('No migrations to apply. Last migration: %s_%s', inspect(ver), name)
+        log.info('No migrations to apply. Last migration: %s', inspect(version))
         return nil
     end
 
@@ -197,8 +196,7 @@ local function migrate_down(self, _n)
         if not ok then
             log.error('Error running migration %s: %s', m.filename, err)
             return {
-                version = m.ver,
-                name = m.name,
+                version = m.version,
                 migration = m.filename,
                 error = err
             }
@@ -208,7 +206,7 @@ local function migrate_down(self, _n)
         if prev_migration == nil then
             _schema_del_version()
         else
-            _schema_set_version(prev_migration.ver, prev_migration.name)
+            _schema_set_version(prev_migration.version)
         end
         log.info('Rolled back migration "%s"', m.filename)
         n = n - 1
@@ -236,6 +234,7 @@ local function _makemigration(self, name, opts)
     end
 
     local date = clock.time()
+    util.check_version_exists(self.migrations_path, date, name)
 
     local requirements_body = ''
     local up_body = ''
@@ -254,10 +253,10 @@ local function _makemigration(self, name, opts)
         down_body = util.tabulate_string(table.concat(migration.down, '\n'), tab)
     end
 
-    local migration_body = string.format([[--
--- Migration "%s"
--- Date: %d - %s
---
+    local migration_body = string.format([[---
+--- Migration "%s"
+--- Date: %d - %s
+---
 %s
 
 return {
@@ -269,10 +268,10 @@ return {
 %s
     end,
 }
-]], name, date, os.date('%x %X', date), requirements_body, up_body, down_body)
+]], lversion.new(date, name), date, os.date('%x %X', date), requirements_body, up_body, down_body)
 
     if not opts.nofile then
-        local path = fio.pathjoin(self.migrations_path, string.format('%d_%s.lua', date, name))
+        local path = fio.pathjoin(self.migrations_path, lversion.new(date, name):str('.lua'))
         fileio.write_to_file(path, migration_body)
     end
     return migration_body
@@ -297,8 +296,11 @@ end
 ---
 --- get function
 ---
-local function get(self, name, compile)
-    return util.read_migration(self.migrations_path, name, compile)
+local function get(self, version, compile)
+    if version == nil then
+        version = self:version()
+    end
+    return util.read_migration(self.migrations_path, tostring(version), compile)
 end
 
 ---
@@ -314,37 +316,30 @@ end
 ---
 --- version function
 ---
-local function version(self)
-    local t = _schema_get_version()
-    if t == nil then
+local function version(self, verbose)
+    local v = _schema_get_version()
+    if v == nil then
         return nil
     end
 
-    return t[2]
-end
-
----
---- version_name function
----
-local function version_name(self)
-    local t = _schema_get_version()
-    if t == nil then
-        return nil
+    v = lversion.parse(v)
+    if verbose then
+        return v
     end
 
-    return t[3]
+    return tostring(v)
 end
 
 ---
 --- migrate_dummy function
 ---
-local function migrate_dummy(self, name)
-    local m = self:get(name, false)
+local function migrate_dummy(self, version)
+    local m = self:get(version, false)
     if m == nil then
-        return error(string.format('migration %s not found', tostring(name)))
+        return error(string.format('migration %s not found', tostring(version)))
     end
 
-    _schema_set_version(m.ver, m.name)
+    _schema_set_version(m.version)
     box.begin()
     for name, _ in pairs(self.__models__) do
         self:models_space():replace({name})
@@ -517,7 +512,6 @@ else
             get = get,
             list = list,
             version = version,
-            version_name = version_name,
         }
     })
     rawset(_G, '__spacer__', M)
