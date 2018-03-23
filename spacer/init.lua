@@ -75,6 +75,15 @@ local function space_drop(self, name)
     self.T[name] = nil
 end
 
+local function _schema_set_version(version)
+    version = tostring(version)
+    return box.space._schema:replace({SCHEMA_KEY, version})
+end
+
+local function _schema_del_version()
+    return box.space._schema:delete({SCHEMA_KEY})
+end
+
 local function _schema_get_version_tuple()
     local t = box.space._schema:get({SCHEMA_KEY})
     if t == nil then return nil end
@@ -93,15 +102,6 @@ local function _schema_get_version()
         return nil
     end
     return t[2]
-end
-
-local function _schema_del_version()
-    return box.space._schema:delete({SCHEMA_KEY})
-end
-
-local function _schema_set_version(version)
-    version = tostring(version)
-    return box.space._schema:replace({SCHEMA_KEY, version})
 end
 
 ---
@@ -316,12 +316,18 @@ end
 ---
 --- version function
 ---
-local function version(self)
+local function version(self, verbose)
     local v = _schema_get_version()
     if v == nil then
         return nil
     end
-    return lversion.parse(v)
+
+    v = lversion.parse(v)
+    if verbose then
+        return v
+    end
+
+    return tostring(v)
 end
 
 ---

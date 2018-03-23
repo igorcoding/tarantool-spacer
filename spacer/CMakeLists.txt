@@ -2,8 +2,8 @@ set(spacer_files
     init.lua
     compat.lua
     fileio.lua
-    migration.lua
     inspect.lua
+    migration.lua
     ops.lua
     stmt.lua
     transformations.lua

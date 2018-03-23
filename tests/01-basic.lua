@@ -415,7 +415,7 @@ local function test__migrate_dummy(t, spacer)
     t:is(spacer:version(), nil, 'version is nil before migrate_dummy')
     spacer:migrate_dummy('object_init')
 
-    t:is(spacer:version().name, 'object_init', 'version up')
+    t:is(spacer:version(true).name, 'object_init', 'version up')
     t:is(spacer:models_space():select()[1][1], 'object', 'space registered')
 
     spacer:clear_schema()
