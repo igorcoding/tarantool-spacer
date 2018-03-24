@@ -48,8 +48,11 @@ spacer.duplicate_space('vy_space1', 'space1', {
 }) -- will be identical to space1 (but in engine = 'vinyl')
 --]]
 
-local log = require('log')
-local msgpack = require('msgpack')
+local digest = require 'digest'
+local log = require 'log'
+local msgpack = require 'msgpack'
+
+local SPACER_V1_SCHEMA_PREFIX = '_spacer_v1'
 
 local spacer = {}
 local F = {}
@@ -101,6 +104,54 @@ local function init_tuple_info(space_name, format)
 	T[space_name].hash = _tuple2hash( F[space_name] )
 	T[space_name].dict = T[space_name].hash
 	T[space_name].tuple = _hash2tuple( F[space_name] )
+end
+
+local function _space_format_hash(format)
+	if format == nil then
+		return nil
+	end
+
+	local sig = ''
+	for _, part in ipairs(format) do
+		if part.name == nil then
+			error('part name cannot be null')
+		end
+
+		if part.type == nil then
+			error('part type cannot be null')
+		end
+
+		sig = sig .. ';' .. part.name .. ':' .. part.type
+	end
+
+	if sig == '' then
+		return nil
+	end
+
+	sig = _TARANTOOL .. '!' .. sig
+	return digest.md5_hex(sig)
+end
+
+local function _check_space_format_changed(space, format)
+	assert(space ~= nil, 'space name must be non-nil')
+	local sig = _space_format_hash(format)
+	if sig == nil then
+		return false
+	end
+
+	local key = SPACER_V1_SCHEMA_PREFIX .. ':' .. space .. ':formatsig'
+
+	local t = box.space._schema:get({key})
+	if t ~= nil then
+		local cur_sig = t[2]
+
+		if sig == cur_sig then
+			return false
+		end
+	end
+
+	box.space._schema:replace({key, sig})
+	return true
 end
 
 local function init_all_spaces_info()
@@ -317,7 +368,11 @@ local function create_space(name, format, indexes, opts)
 	else
 		log.info("Space '%s' is already created. Updating meta information.", name)
 	end
-	sp:format(format)
+
+	if _check_space_format_changed(name, format) then
+		log.info("Updating format for space '%s'", name)
+		sp:format(format)
+	end
 	init_tuple_info(name, format)
 
 	init_indexes(name, indexes)
@@ -350,7 +405,10 @@ local function duplicate_space(new_space, old_space, opts)
 	end
 	local format = box.space._space.index.name:get({old_space})[F._space.format]
 
-	sp:format(format)
+	if _check_space_format_changed(new_space, format) then
+		log.info("Updating format for space '%s'", new_space)
+		sp:format(format)
+	end
 	init_tuple_info(new_space, format)
 
 	local new_indexes = {}
