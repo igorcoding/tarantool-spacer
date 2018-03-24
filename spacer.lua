@@ -91,6 +91,10 @@ local function _hash2tuple ( f )
 end
 
 local function init_tuple_info(space_name, format)
+	if format == nil then
+		return
+	end
+
 	F[space_name] = {}
 	F[space_name]['_'] = {}
 	for k, v in pairs(format) do
@@ -107,25 +111,22 @@ local function init_tuple_info(space_name, format)
 end
 
 local function _space_format_hash(format)
-	if format == nil then
-		return nil
-	end
-
 	local sig = ''
-	for _, part in ipairs(format) do
-		if part.name == nil then
-			error('part name cannot be null')
+
+	if format == nil then
+		sig = 'nil'
+	else
+		for _, part in ipairs(format) do
+			if part.name == nil then
+				error('part name cannot be null')
+			end
+
+			if part.type == nil then
+				error('part type cannot be null')
+			end
+
+			sig = sig .. ';' .. part.name .. ':' .. part.type
 		end
-
-		if part.type == nil then
-			error('part type cannot be null')
-		end
-
-		sig = sig .. ';' .. part.name .. ':' .. part.type
-	end
-
-	if sig == '' then
-		return nil
 	end
 
 	sig = _TARANTOOL .. '!' .. sig
@@ -135,16 +136,11 @@ end
 local function _check_space_format_changed(space, format)
 	assert(space ~= nil, 'space name must be non-nil')
 	local sig = _space_format_hash(format)
-	if sig == nil then
-		return false
-	end
 
 	local key = SPACER_V1_SCHEMA_PREFIX .. ':' .. space .. ':formatsig'
-
 	local t = box.space._schema:get({key})
 	if t ~= nil then
 		local cur_sig = t[2]
-
 		if sig == cur_sig then
 			return false
 		end
