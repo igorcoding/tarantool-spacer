@@ -16,6 +16,7 @@ build = {
     type = 'builtin',
     modules = {
         ['spacer'] = 'spacer.lua',
+        ['spacer.compat'] = 'spacer/compat.lua',
     }
 }
 

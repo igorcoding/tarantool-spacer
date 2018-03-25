@@ -52,6 +52,8 @@ local digest = require 'digest'
 local log = require 'log'
 local msgpack = require 'msgpack'
 
+local compat = require 'spacer.compat'
+
 local SPACER_V1_SCHEMA_PREFIX = '_spacer_v1'
 
 local spacer = {}
@@ -165,6 +167,12 @@ local function get_changed_opts_for_index(existing_index, ind_opts)
 	local changed_opts = {}
 	local changed_opts_count = 0
 
+	if ind_opts.type == nil then
+		ind_opts.type = 'tree'
+	else
+		ind_opts.type = string.lower(ind_opts.type)
+	end
+
 	if ind_opts.unique == nil then
 		ind_opts.unique = true  -- default value of unique
 	end
@@ -248,7 +256,10 @@ local function get_changed_opts_for_index(existing_index, ind_opts)
 				local want_field_no = ind_opts.parts[j]
 				local want_field_type = ind_opts.parts[j + 1]
 
-				if want_field_no ~= part.fieldno or string.lower(want_field_type) ~= string.lower(part.type) then
+				local want_field_type = compat.compat_type(want_field_type)
+				local have_field_type = compat.compat_type(part.type)
+
+				if want_field_no ~= part.fieldno or want_field_type ~= have_field_type then
 					parts_changed = true
 				end
 			end
@@ -279,7 +290,7 @@ local function init_indexes(space_name, indexes, keep_obsolete)
 			assert(ind.name ~= nil, "Index name cannot be null")
 			local ind_opts = {}
 			ind_opts.id = ind.id
-			ind_opts.type = string.lower(ind.type)
+			ind_opts.type = ind.type
 			ind_opts.unique = ind.unique
 			ind_opts.if_not_exists = ind.if_not_exists
 			ind_opts.sequence = ind.sequence
