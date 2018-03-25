@@ -50,7 +50,6 @@ function M.new(ts, name)
     local self = setmetatable({}, M)
     self.ts = tonumber(ts) or NULL
     self.name = name
-    self.v = tostring(self)
     return self
 end
 
@@ -77,5 +76,7 @@ end
 function M.__lt(lhs, rhs)
     return compare_versions(lhs, rhs) < 0
 end
+
+M.__serialize = M.__tostring
 
 return M

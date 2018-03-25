@@ -90,7 +90,6 @@ local function read_migration(path, version, compile)
                 end
 
                 m.migration = data
-                m.version = tostring(m.version)
                 return m
         end
     end
@@ -106,7 +105,6 @@ local function list_migrations(path, verbose)
         if not verbose then
             table.insert(res, m.filename)
         else
-            m.version = tostring(m.version)
             table.insert(res, m)
         end
     end

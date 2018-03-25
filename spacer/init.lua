@@ -316,18 +316,13 @@ end
 ---
 --- version function
 ---
-local function version(self, verbose)
+local function version(self)
     local v = _schema_get_version()
     if v == nil then
         return nil
     end
 
-    v = lversion.parse(v)
-    if verbose then
-        return v
-    end
-
-    return tostring(v)
+    return lversion.parse(v)
 end
 
 ---

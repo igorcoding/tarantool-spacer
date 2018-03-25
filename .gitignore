@@ -45,6 +45,7 @@ luac.out
 *.snap
 tests/migrations
 tests/temp
+.tmp
 
 # CMake
 
