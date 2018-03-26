@@ -43,9 +43,12 @@ local function _space(self, name, format, indexes, opts)
     _init_fields_and_transform(self, name, format)
 
     if self.automigrate then
-        local m = self:_makemigration('automigration', true, true)
-        local compiled_code, err, ok
+        local m = self:_makemigration('automigration', {
+            autogenerate = true,
+            nofile = true,
+        })
 
+        local compiled_code, err, ok
         compiled_code, err = loadstring(m)
         if compiled_code == nil then
             error(string.format('Cannot automigrate due to error: %s', err))
