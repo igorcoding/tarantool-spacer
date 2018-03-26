@@ -1,0 +1,8 @@
+v2.1.1
+* Changed behaviour of migrations' versions handling.
+* Removed version_name() method. Now version() is returning the full version (<timestamp>_<name>).
+* check_alter option for makemigration() function.
+* New migrate_dummy() function to imitate migration applying.
+
+v2.0.1
+* New version 2 with migrations and stuff

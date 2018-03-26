@@ -20,9 +20,11 @@ Tarantool Spacer. Automatic models migrations.
 
 # Installation
 
+The latest `spacer` release is **`2.1.1`**.
+
 Use `luarocks` to install this package by one of the following rockspec from the `rockspecs` folders:
 * `rockspecs/spacer-scm-2.rockspec` - Installs current version 2 from `master` branch
-* `rockspecs/spacer-2.0.1-1.rockspec` - Installs tagged version 2 from `v2.0.1` tag
+* `rockspecs/spacer-2.1.1-1.rockspec` - Installs tagged version 2 from `v2.1.1` tag
 
 There is also a `rockspecs/spacer-scm-1.rockspec` which installs an old **v1** version of spacer (from branch `v1`). This is left here for compatibility reasons for projects that still use spacer v1. Please do not use this version as it is not supported anymore.
 
