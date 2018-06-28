@@ -74,7 +74,7 @@ function fileio.write_to_file(filepath, data)
 
     local fh = fio.open(filepath, {'O_WRONLY', 'O_CREAT'}, local_perms)
     if not fh then
-        error(string.format("Failed to open file %s: %s", dest, errno.strerror()))
+        error(string.format("Failed to open file %s: %s", filepath, errno.strerror()))
     end
 
     fh:write(data)
