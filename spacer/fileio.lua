@@ -1,7 +1,7 @@
 local errno = require 'errno'
 local fio = require 'fio'
 
-local compat = require 'compat'
+local compat = require 'spacer.compat'
 
 local fileio = {}
 
