@@ -1,5 +1,7 @@
-local errno = require('errno')
-local fio = require('fio')
+local errno = require 'errno'
+local fio = require 'fio'
+
+local compat = require 'compat'
 
 local fileio = {}
 
@@ -58,7 +60,7 @@ function fileio.read_file(filepath)
     end
 
     local data
-    if _TARANTOOL >= "1.9" then
+    if compat.check_version({1, 9}) then
         data = fh:read()
     else
         data = fh:read(fh:stat().size)

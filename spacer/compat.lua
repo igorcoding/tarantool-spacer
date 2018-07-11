@@ -1,9 +1,51 @@
 local ver = _TARANTOOL
 
+local function check_version(expected, version)
+    -- from tarantool/queue compat.lua
+    local fun = require 'fun'
+    local iter, op  = fun.iter, fun.operator
+
+    local function split(self, sep)
+        local sep, fields = sep or ":", {}
+        local pattern = string.format("([^%s]+)", sep)
+        self:gsub(pattern, function(c) table.insert(fields, c) end)
+        return fields
+    end
+
+    local function reducer(res, l, r)
+        if res ~= nil then
+            return res
+        end
+        if tonumber(l) == tonumber(r) then
+            return nil
+        end
+        return tonumber(l) > tonumber(r)
+    end
+
+    local function split_version(version_string)
+        local vtable  = split(version_string, '.')
+        local vtable2 = split(vtable[3],  '-')
+        vtable[3], vtable[4] = vtable2[1], vtable2[2]
+        return vtable
+    end
+
+    local function check_version_internal(expected, version)
+        version = version or _TARANTOOL
+        if type(version) == 'string' then
+            version = split_version(version)
+        end
+        local res = iter(version):zip(expected):reduce(reducer, nil)
+
+        if res or res == nil then res = true end
+        return res
+    end
+
+    return check_version_internal(expected, version)
+end
 
 local function compat_type(type)
     type = string.lower(type)
-    if ver >= "1.7" then
+    if check_version({1, 7}, ver) then
         if type == 'string' or type == 'str' then
             return 'string'
         end
@@ -34,14 +76,14 @@ end
 
 local function index_parts_from_fields(space_name, fields, f_extra)
     if fields == nil then
-        if ver >= "1.7" then
+        if check_version({1, 7}, ver) then
             return {{1, 'unsigned'}}
         else
             return {1, 'NUM'}
         end
     end
 
-    if ver >= "1.7" then
+    if check_version({1, 7}, ver) then
         local parts = {}
         for _, p in ipairs(fields) do
             local part = {}
@@ -50,7 +92,7 @@ local function index_parts_from_fields(space_name, fields, f_extra)
                 table.insert(part, f_info.fieldno)
                 table.insert(part, compat_type(f_info.type))
 
-                if ver >= "1.7.6" then
+                if check_version({1, 7, 6}, ver) then
                     part.is_nullable = f_info.is_nullable
                     part.collation = f_info.collation
                 end
@@ -143,12 +185,12 @@ end
 
 
 local function index_parts_from_normalized(normalized_parts)
-    if ver >= "1.7" then
+    if check_version({1, 7}, ver) then
         local parts = {}
         for _, p in ipairs(normalized_parts) do
             local part = {p.fieldno, compat_type(p.type)}
 
-            if ver >= "1.7.6" then
+            if check_version({1, 7, 6}, ver) then
                 part.is_nullable = p.is_nullable
                 part.collation = p.collation
             end
@@ -230,6 +272,7 @@ local function get_default_for_type(type, field_name, indexes_decl)
 end
 
 return {
+    check_version = check_version,
     index_parts_from_fields = index_parts_from_fields,
     normalize_index_tuple_format = normalize_index_tuple_format,
     index_parts_from_normalized = index_parts_from_normalized,
