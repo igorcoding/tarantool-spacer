@@ -81,7 +81,7 @@ local function _hash2tuple ( f )
 		if k < #idx then
 			table.insert(rows,"\th."..v..",\n")
 		else
-			table.insert(rows,"\th."..v.." or require'msgpack'.NULL\n")
+			table.insert(rows,"\th."..v.." or h."..v.." == nil and require'msgpack'.NULL\n")
 		end
 	end
 	return dostring("return function(h) return h and box.tuple.new({\n"..table.concat(rows, "").."}) or nil end\n")
