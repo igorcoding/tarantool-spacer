@@ -48,8 +48,13 @@ spacer.duplicate_space('vy_space1', 'space1', {
 }) -- will be identical to space1 (but in engine = 'vinyl')
 --]]
 
-local log = require('log')
-local msgpack = require('msgpack')
+local digest = require 'digest'
+local log = require 'log'
+local msgpack = require 'msgpack'
+
+local compat = require 'spacer.compat'
+
+local SPACER_V1_SCHEMA_PREFIX = '_spacer_v1'
 
 local spacer = {}
 local F = {}
@@ -88,6 +93,10 @@ local function _hash2tuple ( f )
 end
 
 local function init_tuple_info(space_name, format)
+	if format == nil then
+		return
+	end
+
 	F[space_name] = {}
 	F[space_name]['_'] = {}
 	for k, v in pairs(format) do
@@ -101,6 +110,46 @@ local function init_tuple_info(space_name, format)
 	T[space_name].hash = _tuple2hash( F[space_name] )
 	T[space_name].dict = T[space_name].hash
 	T[space_name].tuple = _hash2tuple( F[space_name] )
+end
+
+local function _space_format_hash(format)
+	local sig = ''
+
+	if format == nil then
+		sig = 'nil'
+	else
+		for _, part in ipairs(format) do
+			if part.name == nil then
+				error('part name cannot be null')
+			end
+
+			if part.type == nil then
+				error('part type cannot be null')
+			end
+
+			sig = sig .. ';' .. part.name .. ':' .. part.type
+		end
+	end
+
+	sig = _TARANTOOL .. '!' .. sig
+	return digest.md5_hex(sig)
+end
+
+local function _check_space_format_changed(space, format)
+	assert(space ~= nil, 'space name must be non-nil')
+	local sig = _space_format_hash(format)
+
+	local key = SPACER_V1_SCHEMA_PREFIX .. ':' .. space .. ':formatsig'
+	local t = box.space._schema:get({key})
+	if t ~= nil then
+		local cur_sig = t[2]
+		if sig == cur_sig then
+			return false
+		end
+	end
+
+	box.space._schema:replace({key, sig})
+	return true
 end
 
 local function init_all_spaces_info()
@@ -117,6 +166,12 @@ local function get_changed_opts_for_index(existing_index, ind_opts)
 
 	local changed_opts = {}
 	local changed_opts_count = 0
+
+	if ind_opts.type == nil then
+		ind_opts.type = 'tree'
+	else
+		ind_opts.type = string.lower(ind_opts.type)
+	end
 
 	if ind_opts.unique == nil then
 		ind_opts.unique = true  -- default value of unique
@@ -201,7 +256,10 @@ local function get_changed_opts_for_index(existing_index, ind_opts)
 				local want_field_no = ind_opts.parts[j]
 				local want_field_type = ind_opts.parts[j + 1]
 
-				if want_field_no ~= part.fieldno or string.lower(want_field_type) ~= string.lower(part.type) then
+				local want_field_type = compat.compat_type(want_field_type)
+				local have_field_type = compat.compat_type(part.type)
+
+				if want_field_no ~= part.fieldno or want_field_type ~= have_field_type then
 					parts_changed = true
 				end
 			end
@@ -232,7 +290,7 @@ local function init_indexes(space_name, indexes, keep_obsolete)
 			assert(ind.name ~= nil, "Index name cannot be null")
 			local ind_opts = {}
 			ind_opts.id = ind.id
-			ind_opts.type = string.lower(ind.type)
+			ind_opts.type = ind.type
 			ind_opts.unique = ind.unique
 			ind_opts.if_not_exists = ind.if_not_exists
 			ind_opts.sequence = ind.sequence
@@ -317,7 +375,11 @@ local function create_space(name, format, indexes, opts)
 	else
 		log.info("Space '%s' is already created. Updating meta information.", name)
 	end
-	sp:format(format)
+
+	if _check_space_format_changed(name, format) then
+		log.info("Updating format for space '%s'", name)
+		sp:format(format)
+	end
 	init_tuple_info(name, format)
 
 	init_indexes(name, indexes)
@@ -350,7 +412,10 @@ local function duplicate_space(new_space, old_space, opts)
 	end
 	local format = box.space._space.index.name:get({old_space})[F._space.format]
 
-	sp:format(format)
+	if _check_space_format_changed(new_space, format) then
+		log.info("Updating format for space '%s'", new_space)
+		sp:format(format)
+	end
 	init_tuple_info(new_space, format)
 
 	local new_indexes = {}
