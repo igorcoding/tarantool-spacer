@@ -62,14 +62,14 @@ to install from the tag.
 
 Initialized spacer somewhere in the beginning of your `init.lua`:
 ```lua
-require 'spacer'({
+require 'spacer'.new({
     migrations = 'path/to/migrations/folder',
 })
 ```
 
 You can assign spacer to a some global variable for easy access:
 ```lua
-box.spacer = require 'spacer'({
+box.spacer = require 'spacer'.new({
     migrations = 'path/to/migrations/folder',
 })
 ```
@@ -77,6 +77,7 @@ box.spacer = require 'spacer'({
 ### Spacer options
 
 * `migrations` (required) - Path to migrations folder
+* `name` (default is `''`) - Spacer instance name. You can have multiple independent instances
 * `global_ft` (default is `true`) - Expose `F` and `T` variables to the global `_G` table (see [Fields](#Fields) and [Transformations](#Transformations) sections).
 * `automigrate` (default is `false`) - Automatically applies migrations after spacer:space() call without creating a migration file. Useful when changing schema a lot.
 * `keep_obsolete_spaces` (default is `false`) - do not track space removals
@@ -88,7 +89,7 @@ box.spacer = require 'spacer'({
 You can easily define new spaces in a separate file (e.g. `models.lua`) and all
 you will need to do is to `require` it from `init.lua` right after spacer initialization:
 ```lua
-box.spacer = require 'spacer'({
+box.spacer = require 'spacer'.new({
     migrations = 'path/to/migrations/folder',
 })
 require 'models'
@@ -99,7 +100,7 @@ require 'models'
 Note that spacer now has methods
 
 ```lua
-local spacer = require 'spacer'
+local spacer = require 'spacer'.get()
 
 spacer:space({
     name = 'object',
