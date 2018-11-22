@@ -464,7 +464,7 @@ end
 local function main()
     tnt.cfg{}
 
-    local spacer = require 'spacer'({
+    local spacer = require 'spacer'.new({
         migrations = './migrations',
         down_migration_fail_on_impossible = false,
     })

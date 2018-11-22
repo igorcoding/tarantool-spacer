@@ -363,31 +363,103 @@ local function _init_models_space(self)
     return sp
 end
 
-local M = rawget(_G, '__spacer__')
-if M ~= nil then
-    -- 2nd+ load
-    local m
-    local prune_models = {}
-    for m, _ in pairs(M.F) do
-        if box.space._vspace.index.name:get({m}) == nil then
-            table.insert(prune_models, m)
+
+local spacer_mt = {
+    __index = {
+        _space = _space,
+        _migrate_one_up = _migrate_one_up,
+        _migrate_one_down = _migrate_one_down,
+        _makemigration = _makemigration,
+
+        space = space,
+        space_drop = space_drop,
+        migrate_up = migrate_up,
+        migrate_down = migrate_down,
+        migrate_dummy = migrate_dummy,
+        makemigration = makemigration,
+        clear_schema = clear_schema,
+        models_space = models_space,
+        get = get,
+        list = list,
+        version = version,
+    }
+}
+
+
+local function new_spacer(user_opts)
+    local valid_options = {
+        name = {
+            required = false,
+            default = ''
+        },
+        migrations = {
+            required = true,
+            self_name = 'migrations_path'
+        },
+        global_ft = {
+            required = false,
+            default = true,
+        },
+        automigrate = {
+            required = false,
+            default = false,
+        },
+        keep_obsolete_spaces = {
+            required = false,
+            default = false,
+        },
+        keep_obsolete_indexes = {
+            required = false,
+            default = false,
+        },
+        down_migration_fail_on_impossible = {
+            required = false,
+            default = true,
+        },
+    }
+
+    local opts = {}
+    local invalid_options = {}
+    -- check user provided options
+    for key, value in pairs(user_opts) do
+        local opt_info = valid_options[key]
+        if opt_info == nil then
+            table.insert(invalid_options, key)
+        else
+            if opt_info.required and value == nil then
+                error(string.format('Option "%s" is required', key))
+            elseif value == nil then
+                opts[key] = opt_info.default
+            else
+                opts[key] = value
+            end
         end
     end
 
-    M.__models__ = {}  -- clean all loaded models
-    for _, m in ipairs(prune_models) do
-        M.F[m] = nil
-        M.F_FULL[m] = nil
-        M.T[m] = nil
+    if #invalid_options > 0 then
+        error(string.format('Unknown options provided: [%s]', table.concat(invalid_options, ', ')))
     end
 
-    -- initialize current spaces fields and transformations
-    for _, sp in box.space._vspace:pairs() do
-        _init_fields_and_transform(M, sp[3], sp[7])
+    -- check that user provided all required options
+    for valid_key, opt_info in pairs(valid_options) do
+        local value = user_opts[valid_key]
+        if opt_info.required and value == nil then
+            error(string.format('Option "%s" is required', valid_key))
+        elseif user_opts[valid_key] == nil then
+            opts[valid_key] = opt_info.default
+        else
+            opts[valid_key] = value
+        end
     end
-else
-    -- 1st load
-    M = setmetatable({
+
+    if not fileio.exists(opts.migrations) then
+        if not fio.mkdir(opts.migrations) then
+            local e = errno()
+            error(string.format("Couldn't create migrations dir '%s': %d/%s", opts.migrations, e, errno.strerror(e)))
+        end
+    end
+
+    local self = setmetatable({
         name = '',
         migrations_path = NULL,
         automigrate = NULL,
@@ -398,130 +470,85 @@ else
         F = {},
         F_FULL = {},
         T = {},
-    },{
-        __call = function(self, user_opts)
-            local valid_options = {
-                name = {
-                    required = false,
-                    default = ''
-                },
-                migrations = {
-                    required = true,
-                    self_name = 'migrations_path'
-                },
-                global_ft = {
-                    required = false,
-                    default = true,
-                },
-                automigrate = {
-                    required = false,
-                    default = false,
-                },
-                keep_obsolete_spaces = {
-                    required = false,
-                    default = false,
-                },
-                keep_obsolete_indexes = {
-                    required = false,
-                    default = false,
-                },
-                down_migration_fail_on_impossible = {
-                    required = false,
-                    default = true,
-                },
-            }
+    }, spacer_mt)
 
-            local opts = {}
-            local invalid_options = {}
-            -- check user provided options
-            for key, value in pairs(user_opts) do
-                local opt_info = valid_options[key]
-                if opt_info == nil then
-                    table.insert(invalid_options, key)
-                else
-                    if opt_info.required and value == nil then
-                        error(string.format('Option "%s" is required', key))
-                    elseif value == nil then
-                        opts[key] = opt_info.default
-                    else
-                        opts[key] = value
-                    end
-                end
-            end
+    for valid_key, opt_info in pairs(valid_options) do
+        if opt_info.self_name == nil then
+            opt_info.self_name = valid_key
+        end
 
-            if #invalid_options > 0 then
-                error(string.format('Unknown options provided: [%s]', table.concat(invalid_options, ', ')))
-            end
+        self[opt_info.self_name] = opts[valid_key]
+    end
 
-            -- check that user provided all required options
-            for valid_key, opt_info in pairs(valid_options) do
-                local value = user_opts[valid_key]
-                if opt_info.required and value == nil then
-                    error(string.format('Option "%s" is required', valid_key))
-                elseif user_opts[valid_key] == nil then
-                    opts[valid_key] = opt_info.default
-                else
-                    opts[valid_key] = value
-                end
-            end
+    local name_suffix = ''
+    if self.name ~= '' then
+        name_suffix = '_' .. self.name
+    end
+    self.schema_key = string.format('_spacer%s_ver', name_suffix)
+    self.models_space_name = string.format('_spacer%s_models', name_suffix)
 
-            if not fileio.exists(opts.migrations) then
-                if not fio.mkdir(opts.migrations) then
-                    local e = errno()
-                    error(string.format("Couldn't create migrations dir '%s': %d/%s", opts.migrations, e, errno.strerror(e)))
-                end
-            end
+    -- initialize current spaces fields and transformations
+    for _, sp in box.space._vspace:pairs() do
+        _init_fields_and_transform(self, sp[3], sp[7])
+    end
 
-            for valid_key, opt_info in pairs(valid_options) do
-                if opt_info.self_name == nil then
-                    opt_info.self_name = valid_key
-                end
+    if opts.global_ft then
+        rawset(_G, 'F', self.F)
+        rawset(_G, 'F_FULL', self.F_FULL)
+        rawset(_G, 'T', self.T)
+    end
 
-                self[opt_info.self_name] = opts[valid_key]
-            end
+    _init_models_space(self)
 
-            local name_suffix = ''
-            if self.name ~= '' then
-                name_suffix = '_' .. self.name
-            end
-            self.schema_key = string.format('_spacer%s_ver', name_suffix)
-            self.models_space_name = string.format('_spacer%s_models', name_suffix)
+    if rawget(_G, '__spacer__') == nil then
+        rawset(_G, '__spacer__', {})
+    end
+    rawget(_G, '__spacer__')[self.name] = self
 
-            -- initialize current spaces fields and transformations
-            for _, sp in box.space._vspace:pairs() do
-                _init_fields_and_transform(self, sp[3], sp[7])
-            end
-
-            if opts.global_ft then
-                rawset(_G, 'F', self.F)
-                rawset(_G, 'F_FULL', self.F_FULL)
-                rawset(_G, 'T', self.T)
-            end
-
-            _init_models_space(self)
-
-            return self
-        end,
-        __index = {
-            _space = _space,
-            _migrate_one_up = _migrate_one_up,
-            _migrate_one_down = _migrate_one_down,
-            _makemigration = _makemigration,
-
-            space = space,
-            space_drop = space_drop,
-            migrate_up = migrate_up,
-            migrate_down = migrate_down,
-            migrate_dummy = migrate_dummy,
-            makemigration = makemigration,
-            clear_schema = clear_schema,
-            models_space = models_space,
-            get = get,
-            list = list,
-            version = version,
-        }
-    })
-    rawset(_G, '__spacer__', M)
+    return self
 end
 
-return M
+local spacers = rawget(_G, '__spacer__')
+if spacers ~= nil then
+    -- 2nd+ load
+
+    local M
+    for k, M in pairs(spacers) do
+        local m
+        local prune_models = {}
+        for m, _ in pairs(M.F) do
+            if box.space._vspace.index.name:get({m}) == nil then
+                table.insert(prune_models, m)
+            end
+        end
+
+        M.__models__ = {}  -- clean all loaded models
+        for _, m in ipairs(prune_models) do
+            M.F[m] = nil
+            M.F_FULL[m] = nil
+            M.T[m] = nil
+        end
+
+        -- initialize current spaces fields and transformations
+        for _, sp in box.space._vspace:pairs() do
+            _init_fields_and_transform(M, sp[3], sp[7])
+        end
+    end
+end
+
+return {
+    new = new_spacer,
+    get = function(name)
+        local spacers = rawget(_G, '__spacer__')
+        if spacers == nil then
+            error('no spacer created yet')
+        end
+
+        local self = spacers[name or '']
+        if self == nil then
+            error(string.format('spacer %s not found', name))
+        end
+
+        return self
+    end
+}

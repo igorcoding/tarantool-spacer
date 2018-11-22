@@ -1,3 +1,10 @@
+v3.0.0
+* Breaking change: changed Spacer api. Now it has 2 methods: new() and get(). `new` creates a new
+  spacer instance as usual require 'spacer'({}) call. `get()` returns a spacer
+  instance by its name or a default instance.
+* spacer instances can have names now. And they are fully independent in terms of
+  migrations and allocated system spaces.
+
 v2.1.1
 * Changed behaviour of migrations' versions handling.
 * Removed version_name() method. Now version() is returning the full version (<timestamp>_<name>).
