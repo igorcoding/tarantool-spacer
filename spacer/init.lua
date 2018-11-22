@@ -14,9 +14,6 @@ local lversion = require 'spacer.version'
 
 local NULL = require 'msgpack'.NULL
 
-local SCHEMA_KEY = '_spacer_ver'
-local SPACER_MODELS_SPACE = '_spacer_models'
-
 
 local function _init_fields_and_transform(self, space_name, format)
     local f, f_extra = space_migration.generate_field_info(format)
@@ -78,29 +75,29 @@ local function space_drop(self, name)
     self.T[name] = nil
 end
 
-local function _schema_set_version(version)
+local function _schema_set_version(self, version)
     version = tostring(version)
-    return box.space._schema:replace({SCHEMA_KEY, version})
+    return box.space._schema:replace({self.schema_key, version})
 end
 
-local function _schema_del_version()
-    return box.space._schema:delete({SCHEMA_KEY})
+local function _schema_del_version(self)
+    return box.space._schema:delete({self.schema_key})
 end
 
-local function _schema_get_version_tuple()
-    local t = box.space._schema:get({SCHEMA_KEY})
+local function _schema_get_version_tuple(self)
+    local t = box.space._schema:get({self.schema_key})
     if t == nil then return nil end
 
     if #t > 2 then -- contains version and name separately
         local version = string.format('%s_%s', t[2], t[3])
-        return _schema_set_version(version)
+        return _schema_set_version(self, version)
     end
 
     return t
 end
 
-local function _schema_get_version()
-    local t = _schema_get_version_tuple()
+local function _schema_get_version(self)
+    local t = _schema_get_version_tuple(self)
     if t == nil then
         return nil
     end
@@ -131,7 +128,7 @@ local function migrate_up(self, _n)
         error('n must be a number or nil')
     end
 
-    local version = _schema_get_version()
+    local version = _schema_get_version(self)
     local migrations = util.read_migrations(self.migrations_path, 'up', version, n)
 
     if #migrations == 0 then
@@ -150,7 +147,7 @@ local function migrate_up(self, _n)
             }
         end
 
-        _schema_set_version(m.version)
+        _schema_set_version(self, m.version)
         log.info('Applied migration "%s"', m.filename)
     end
 
@@ -186,7 +183,7 @@ local function migrate_down(self, _n)
         n = 1
     end
 
-    local version = _schema_get_version()
+    local version = _schema_get_version(self)
     local migrations = util.read_migrations(self.migrations_path, 'down', version, n + 1)
 
     if #migrations == 0 then
@@ -207,9 +204,9 @@ local function migrate_down(self, _n)
 
         local prev_migration = migrations[i + 1]
         if prev_migration == nil then
-            _schema_del_version()
+            _schema_del_version(self)
         else
-            _schema_set_version(prev_migration.version)
+            _schema_set_version(self, prev_migration.version)
         end
         log.info('Rolled back migration "%s"', m.filename)
         n = n - 1
@@ -285,15 +282,15 @@ local function makemigration(self, ...) self:_makemigration(...) end
 --- models_space function
 ---
 local function models_space(self)
-    return box.space[SPACER_MODELS_SPACE]
+    return box.space[self.models_space_name]
 end
 
 ---
 --- clear_schema function
 ---
 local function clear_schema(self)
-    _schema_del_version()
-    self.models_space():truncate()
+    _schema_del_version(self)
+    self:models_space():truncate()
 end
 
 ---
@@ -320,7 +317,7 @@ end
 --- version function
 ---
 local function version(self)
-    local v = _schema_get_version()
+    local v = _schema_get_version(self)
     if v == nil then
         return nil
     end
@@ -337,7 +334,7 @@ local function migrate_dummy(self, version)
         return error(string.format('migration %s not found', tostring(version)))
     end
 
-    _schema_set_version(m.version)
+    _schema_set_version(self, m.version)
     box.begin()
     for name, _ in pairs(self.__models__) do
         self:models_space():replace({name})
@@ -349,7 +346,7 @@ end
 local function _init_models_space(self)
     if box.cfg.read_only then return end
 
-    local sp = box.schema.create_space(SPACER_MODELS_SPACE, {if_not_exists = true})
+    local sp = box.schema.create_space(self.models_space_name, {if_not_exists = true})
     sp:format({
         {name = 'name', type = 'string'},
     })
@@ -391,6 +388,7 @@ if M ~= nil then
 else
     -- 1st load
     M = setmetatable({
+        name = '',
         migrations_path = NULL,
         automigrate = NULL,
         keep_obsolete_spaces = NULL,
@@ -403,6 +401,10 @@ else
     },{
         __call = function(self, user_opts)
             local valid_options = {
+                name = {
+                    required = false,
+                    default = ''
+                },
                 migrations = {
                     required = true,
                     self_name = 'migrations_path'
@@ -477,6 +479,13 @@ else
 
                 self[opt_info.self_name] = opts[valid_key]
             end
+
+            local name_suffix = ''
+            if self.name ~= '' then
+                name_suffix = '_' .. self.name
+            end
+            self.schema_key = string.format('_spacer%s_ver', name_suffix)
+            self.models_space_name = string.format('_spacer%s_models', name_suffix)
 
             -- initialize current spaces fields and transformations
             for _, sp in box.space._vspace:pairs() do
