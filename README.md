@@ -51,7 +51,7 @@ to install from master
 or
 
 ```
-luarocks install https://raw.githubusercontent.com/igorcoding/tarantool-spacer/master/rockspecs/spacer-2.0.1-1.rockspec
+luarocks install https://raw.githubusercontent.com/igorcoding/tarantool-spacer/master/rockspecs/spacer-2.1.2-1.rockspec
 ```
 
 to install from the tag.
