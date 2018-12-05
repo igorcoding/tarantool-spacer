@@ -233,12 +233,17 @@ local function _makemigration(self, name, opts)
         opts.check_alter = true
     end
 
+    if opts.allow_empty == nil then
+        opts.allow_empty = true
+    end
+
     local date = clock.time()
     util.check_version_exists(self.migrations_path, date, name)
 
     local requirements_body = ''
     local up_body = ''
     local down_body = ''
+    local have_changes = false
     if opts.autogenerate then
         local migration = space_migration.spaces_migration(self, self.__models__, opts.check_alter)
         requirements_body = table.concat(
@@ -249,6 +254,11 @@ local function _makemigration(self, name, opts)
             '\n')
 
         local tab = string.rep(' ', 8)
+
+        if #migration.up > 0 or #migration.down > 0 then
+            have_changes = true
+        end
+
         up_body = util.tabulate_string(table.concat(migration.up, '\n'), tab)
         down_body = util.tabulate_string(table.concat(migration.down, '\n'), tab)
     end
@@ -270,11 +280,11 @@ return {
 }
 ]], lversion.new(date, name), date, os.date('%x %X', date), requirements_body, up_body, down_body)
 
-    if not opts.nofile then
+    if not opts.nofile and (have_changes or (not have_changes and opts.allow_empty)) then
         local path = fio.pathjoin(self.migrations_path, lversion.new(date, name):str('.lua'))
         fileio.write_to_file(path, migration_body)
     end
-    return migration_body
+    return migration_body, have_changes
 end
 local function makemigration(self, ...) self:_makemigration(...) end
 
