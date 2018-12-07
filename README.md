@@ -136,6 +136,7 @@ There are 2 arguments to the `makemigration` method:
 2. Options
 * `autogenerate` (`true`/`false`) - Autogenerate migration (default is `true`). If `false` then empty migration file is generated
 * `check_alter` (`true`/`false`) - Default is `true` - so spacer will check spaces and indexes for changes and create alter migrations. If `false` then spacer will assume that spaces never existed. Useful when you want to add spacer to already existing project.
+* `allow_empty` (`true`, `false`) - Default is `true`. If `false` no migration files will be created if there are no schema changes. If `true` an empty migration file will be created instead.
 
 After executing this command a new migrations file will be generated under name `<timestamp>_<migration_name>.lua` inside your `migrations` folder:
 ```lua
