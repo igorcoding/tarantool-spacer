@@ -1,5 +1,5 @@
 package = 'spacer'
-version = '3.0.0.-1'
+version = '3.0.0-1'
 source  = {
     url = 'git://github.com/igorcoding/tarantool-spacer.git',
     tag = 'v3.0.0',
