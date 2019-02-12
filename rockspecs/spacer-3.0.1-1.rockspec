@@ -2,7 +2,7 @@ package = 'spacer'
 version = '3.0.1-1'
 source  = {
     url = 'git://github.com/igorcoding/tarantool-spacer.git',
-    tag = 'v3.0.0',
+    tag = 'v3.0.1',
 }
 description = {
     summary  = "Tarantool Spacer. Automatic models migrations.",
