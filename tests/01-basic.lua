@@ -243,7 +243,7 @@ local function test__add_rtree_index(t, spacer)
         indexes = {
             { name = 'primary', type = 'tree', unique = true, parts = { 'id' }, sequence = true },
             { name = 'name', type = 'tree', unique = false, parts = { 'name' } },
-            { name = 'rtree', type = 'rtree', dimension = 3, distance = 'euclid', unique = false, parts = { 'arr' } }
+            { name = 'rtree', type = 'rtree', dimension = 3, unique = false, parts = { 'arr' } }
         }
     })
     spacer:makemigration('object_rtree')
@@ -255,9 +255,6 @@ local function test__add_rtree_index(t, spacer)
     t:is(string.upper(sp.index.rtree.type), 'RTREE', 'rtree created')
     t:isnil(sp.index.rtree.unique, 'unique correct')
     t:is(sp.index.rtree.dimension, 3, 'dimension correct')
-
-    local _ind = box.space._vindex:get({sp.id, sp.index.rtree.id})
-    t:is(_ind[5].distance, 'euclid', 'distance correct')
 
     cmp_parts(t, sp.index.rtree.parts, {
         { fieldno = 3, type = 'array' },
@@ -302,9 +299,6 @@ local function test__drop_rtree_index(t, spacer)
     t:is(string.upper(sp.index.rtree.type), 'RTREE', 'rtree created')
     t:isnil(sp.index.rtree.unique, 'unique correct')
     t:is(sp.index.rtree.dimension, 3, 'dimension correct')
-
-    local _ind = box.space._vindex:get({sp.id, sp.index.rtree.id})
-    t:is(_ind[5].distance, 'euclid', 'distance correct')
 
     cmp_parts(t, sp.index.rtree.parts, {
         { fieldno = 3, type = 'array' },

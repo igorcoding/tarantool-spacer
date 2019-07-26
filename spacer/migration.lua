@@ -108,10 +108,6 @@ local function get_changed_opts_for_index(spacer, space_name, existing_index, in
             ind_opts.dimension = 2  -- default value for dimension
         end
 
-        if ind_opts.distance == nil then
-            ind_opts.distance = 'euclid'  -- default value for distance
-        end
-
         if existing_index.dimension ~= ind_opts.dimension then
             opts_up.dimension = ind_opts.dimension
             opts_down.dimension = existing_index.dimension
