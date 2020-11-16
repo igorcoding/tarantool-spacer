@@ -79,7 +79,6 @@ box.spacer = require 'spacer'.new({
 * `migrations` (required) - Path to migrations folder
 * `name` (default is `''`) - Spacer instance name. You can have multiple independent instances
 * `global_ft` (default is `true`) - Expose `F` and `T` variables to the global `_G` table (see [Fields](#Fields) and [Transformations](#Transformations) sections).
-* `automigrate` (default is `false`) - Automatically applies migrations after spacer:space() call without creating a migration file. Useful when changing schema a lot.
 * `keep_obsolete_spaces` (default is `false`) - do not track space removals
 * `keep_obsolete_indexes` (default is `false`) - do not track indexes removals
 * `down_migration_fail_on_impossible` (default is `true`) - Generate an `assert(false)` statement in a down migration when detecting new fields in format, so user can perform proper actions on a down migration.
@@ -278,6 +277,38 @@ You can force spacer to think that the specified migration is already migrated b
 ```lua
 box.spacer:migrate_dummy(name)
 ```
+
+## automigrate
+
+Automatically applies migrations without creating an actual migration file. Useful when changing schema a lot in development. **Highly discouraged to be used in production**.
+Call this method after all spacer:space(...) calls like this:
+
+```lua
+spacer:space({
+    name = "object1",
+    format = {
+        {name = "id", type = "unsigned"}
+    },
+    indexes = {
+        {name = "primary", type = "tree", unique = true, parts = {"id"}}
+    }
+})
+
+spacer:space({
+    name = "object2",
+    format = {
+        {name = "id", type = "unsigned"}
+    },
+    indexes = {
+      {name = "primary", type = "tree", unique = true, parts = {"id"}}
+    }
+})
+
+spacer:automigrate()
+```
+
+But when you decide that you need to grenerate migrations - either drop your db and create 
+migrations from scratch or have a loot at [Migrating a project to using spacer](#Migrating-a-project-to-using-spacer).
 
 ### Options
 * `name` (required) - Can be either a filename or version number or full migration name.

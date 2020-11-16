@@ -1,19 +1,18 @@
-local clock = require 'clock'
-local errno = require 'errno'
-local fio = require 'fio'
-local fun = require 'fun'
-local log = require 'log'
+local clock = require "clock"
+local errno = require "errno"
+local fio = require "fio"
+local fun = require "fun"
+local log = require "log"
 
-local compat = require 'spacer.compat'
-local fileio = require 'spacer.fileio'
-local inspect = require 'spacer.inspect'
-local space_migration = require 'spacer.migration'
-local util = require 'spacer.util'
-local transformations = require 'spacer.transformations'
-local lversion = require 'spacer.version'
+local compat = require "spacer.compat"
+local fileio = require "spacer.fileio"
+local inspect = require "spacer.inspect"
+local space_migration = require "spacer.migration"
+local util = require "spacer.util"
+local transformations = require "spacer.transformations"
+local lversion = require "spacer.version"
 
-local NULL = require 'msgpack'.NULL
-
+local NULL = require "msgpack".NULL
 
 local function _init_fields_and_transform(self, space_name, format)
     local f, f_extra = space_migration.generate_field_info(format)
@@ -22,48 +21,57 @@ local function _init_fields_and_transform(self, space_name, format)
     self.T[space_name] = {}
     self.T[space_name].dict = transformations.tuple2hash(f)
     self.T[space_name].tuple = transformations.hash2tuple(f)
-    self.T[space_name].hash = self.T[space_name].dict  -- alias
+    self.T[space_name].hash = self.T[space_name].dict -- alias
 end
 
+local function automigrate(self)
+    local m, have_changes =
+        self:_makemigration(
+        "automigration",
+        {
+            autogenerate = true,
+            nofile = true
+        }
+    )
+
+    if not have_changes then
+        log.info("spacer.automigrate detected no changes in schema")
+        return
+    end
+
+    local compiled_code, err, ok
+    compiled_code, err = loadstring(m)
+    if compiled_code == nil then
+        error(string.format("Cannot automigrate due to error: %s", err))
+        return
+    end
+
+    ok, err = self:_migrate_one_up(compiled_code)
+    if not ok then
+        error(string.format("Error while applying migration: %s", err))
+    end
+
+    log.info("spacer performed automigration: %s", m)
+end
 
 local function _space(self, name, format, indexes, opts)
     assert(name ~= nil, "Space name cannot be null")
     assert(format ~= nil, "Space format cannot be null")
     assert(indexes ~= nil, "Space indexes cannot be null")
     self.__models__[name] = {
-        type = 'raw',
+        type = "raw",
         space_name = name,
         space_format = format,
         space_indexes = indexes,
-        space_opts = opts,
+        space_opts = opts
     }
     _init_fields_and_transform(self, name, format)
-
-    if self.automigrate then
-        local m = self:_makemigration('automigration', {
-            autogenerate = true,
-            nofile = true,
-        })
-
-        local compiled_code, err, ok
-        compiled_code, err = loadstring(m)
-        if compiled_code == nil then
-            error(string.format('Cannot automigrate due to error: %s', err))
-            return
-        end
-
-        ok, err = self:_migrate_one_up(compiled_code)
-        if not ok then
-            error(string.format('Error while applying migration: %s', err))
-        end
-    end
 end
 
 local function space(self, space_decl)
-    assert(space_decl ~= nil, 'Space declaration is missing')
+    assert(space_decl ~= nil, "Space declaration is missing")
     return self:_space(space_decl.name, space_decl.format, space_decl.indexes, space_decl.opts)
 end
-
 
 local function space_drop(self, name)
     assert(name ~= nil, "Space name cannot be null")
@@ -86,10 +94,12 @@ end
 
 local function _schema_get_version_tuple(self)
     local t = box.space._schema:get({self.schema_key})
-    if t == nil then return nil end
+    if t == nil then
+        return nil
+    end
 
     if #t > 2 then -- contains version and name separately
-        local version = string.format('%s_%s', t[2], t[3])
+        local version = string.format("%s_%s", t[2], t[3])
         return _schema_set_version(self, version)
     end
 
@@ -110,8 +120,8 @@ end
 local function _migrate_one_up(self, migration)
     setfenv(migration, _G)
     local funcs = migration()
-    assert(funcs ~= nil, 'Migration file should return { up = function() ... end, down = function() ... end } table')
-    assert(funcs.up ~= nil, 'up function is required')
+    assert(funcs ~= nil, "Migration file should return { up = function() ... end, down = function() ... end } table")
+    assert(funcs.up ~= nil, "up function is required")
     local ok, err = pcall(funcs.up)
     if not ok then
         return false, err
@@ -125,21 +135,21 @@ end
 local function migrate_up(self, _n)
     local n = tonumber(_n)
     if n == nil and _n ~= nil then
-        error('n must be a number or nil')
+        error("n must be a number or nil")
     end
 
     local version = _schema_get_version(self)
-    local migrations = util.read_migrations(self.migrations_path, 'up', version, n)
+    local migrations = util.read_migrations(self.migrations_path, "up", version, n)
 
     if #migrations == 0 then
-        log.info('No migrations to apply. Last migration: %s', inspect(version))
+        log.info("No migrations to apply. Last migration: %s", inspect(version))
         return nil
     end
 
     for _, m in ipairs(migrations) do
         local ok, err = self:_migrate_one_up(m.migration)
         if not ok then
-            log.error('Error running migration %s: %s', m.filename, err)
+            log.error("Error running migration %s: %s", m.filename, err)
             return {
                 version = m.version,
                 migration = m.filename,
@@ -154,15 +164,14 @@ local function migrate_up(self, _n)
     return nil
 end
 
-
 ---
 --- _migrate_one_down function
 ---
 local function _migrate_one_down(self, migration)
     setfenv(migration, _G)
     local funcs = migration()
-    assert(funcs ~= nil, 'Migration file should return { up = function() ... end, down = function() ... end } table')
-    assert(funcs.down ~= nil, 'down function is required')
+    assert(funcs ~= nil, "Migration file should return { up = function() ... end, down = function() ... end } table")
+    assert(funcs.down ~= nil, "down function is required")
     local ok, err = pcall(funcs.down)
     if not ok then
         return false, err
@@ -176,7 +185,7 @@ end
 local function migrate_down(self, _n)
     local n = tonumber(_n)
     if n == nil and _n ~= nil then
-        error('n must be a number or nil')
+        error("n must be a number or nil")
     end
 
     if n == nil then
@@ -184,17 +193,17 @@ local function migrate_down(self, _n)
     end
 
     local version = _schema_get_version(self)
-    local migrations = util.read_migrations(self.migrations_path, 'down', version, n + 1)
+    local migrations = util.read_migrations(self.migrations_path, "down", version, n + 1)
 
     if #migrations == 0 then
-        log.info('No migrations to apply. Last migration: %s', inspect(version))
+        log.info("No migrations to apply. Last migration: %s", inspect(version))
         return nil
     end
 
     for i, m in ipairs(migrations) do
         local ok, err = self:_migrate_one_down(m.migration)
         if not ok then
-            log.error('Error running migration %s: %s', m.filename, err)
+            log.error("Error running migration %s: %s", m.filename, err)
             return {
                 version = m.version,
                 migration = m.filename,
@@ -222,8 +231,10 @@ end
 --- makemigration function
 ---
 local function _makemigration(self, name, opts)
-    assert(name ~= nil, 'Migration name is required')
-    if opts == nil then opts = {} end
+    assert(name ~= nil, "Migration name is required")
+    if opts == nil then
+        opts = {}
+    end
 
     if opts.autogenerate == nil then
         opts.autogenerate = true
@@ -240,30 +251,35 @@ local function _makemigration(self, name, opts)
     local date = clock.time()
     util.check_version_exists(self.migrations_path, date, name)
 
-    local requirements_body = ''
-    local up_body = ''
-    local down_body = ''
+    local requirements_body = ""
+    local up_body = ""
+    local down_body = ""
     local have_changes = false
     if opts.autogenerate then
         local migration = space_migration.spaces_migration(self, self.__models__, opts.check_alter)
-        requirements_body = table.concat(
+        requirements_body =
+            table.concat(
             fun.iter(migration.requirements):map(
                 function(key, r)
                     return string.format("local %s = require '%s'", r.name, key)
-                end):totable(),
-            '\n')
+                end
+            ):totable(),
+            "\n"
+        )
 
-        local tab = string.rep(' ', 8)
+        local tab = string.rep(" ", 8)
 
         if #migration.up > 0 or #migration.down > 0 then
             have_changes = true
         end
 
-        up_body = util.tabulate_string(table.concat(migration.up, '\n'), tab)
-        down_body = util.tabulate_string(table.concat(migration.down, '\n'), tab)
+        up_body = util.tabulate_string(table.concat(migration.up, "\n"), tab)
+        down_body = util.tabulate_string(table.concat(migration.down, "\n"), tab)
     end
 
-    local migration_body = string.format([[---
+    local migration_body =
+        string.format(
+        [[---
 --- Migration "%s"
 --- Date: %d - %s
 ---
@@ -278,15 +294,24 @@ return {
 %s
     end,
 }
-]], lversion.new(date, name), date, os.date('%x %X', date), requirements_body, up_body, down_body)
+]],
+        lversion.new(date, name),
+        date,
+        os.date("%x %X", date),
+        requirements_body,
+        up_body,
+        down_body
+    )
 
     if not opts.nofile and (have_changes or (not have_changes and opts.allow_empty)) then
-        local path = fio.pathjoin(self.migrations_path, lversion.new(date, name):str('.lua'))
+        local path = fio.pathjoin(self.migrations_path, lversion.new(date, name):str(".lua"))
         fileio.write_to_file(path, migration_body)
     end
     return migration_body, have_changes
 end
-local function makemigration(self, ...) self:_makemigration(...) end
+local function makemigration(self, ...)
+    self:_makemigration(...)
+end
 
 ---
 --- models_space function
@@ -341,7 +366,7 @@ end
 local function migrate_dummy(self, version)
     local m = self:get(version, false)
     if m == nil then
-        return error(string.format('migration %s not found', tostring(version)))
+        return error(string.format("migration %s not found", tostring(version)))
     end
 
     _schema_set_version(self, m.version)
@@ -352,27 +377,35 @@ local function migrate_dummy(self, version)
     box.commit()
 end
 
-
 local function _init_models_space(self)
-    if box.cfg.read_only then return end
+    if box.cfg.read_only then
+        return
+    end
 
     local sp = box.schema.create_space(self.models_space_name, {if_not_exists = true})
-    sp:format({
-        {name = 'name', type = 'string'},
-    })
-    local parts = compat.normalize_index_tuple_format({
-        {1, 'string'}
-    })
+    sp:format(
+        {
+            {name = "name", type = "string"}
+        }
+    )
+    local parts =
+        compat.normalize_index_tuple_format(
+        {
+            {1, "string"}
+        }
+    )
     parts = compat.index_parts_from_normalized(parts)
 
-    sp:create_index('primary', {
-        parts = parts,
-        if_not_exists = true
-    })
+    sp:create_index(
+        "primary",
+        {
+            parts = parts,
+            if_not_exists = true
+        }
+    )
 
     return sp
 end
-
 
 local spacer_mt = {
     __index = {
@@ -380,52 +413,47 @@ local spacer_mt = {
         _migrate_one_up = _migrate_one_up,
         _migrate_one_down = _migrate_one_down,
         _makemigration = _makemigration,
-
         space = space,
         space_drop = space_drop,
         migrate_up = migrate_up,
         migrate_down = migrate_down,
         migrate_dummy = migrate_dummy,
         makemigration = makemigration,
+        automigrate = automigrate,
         clear_schema = clear_schema,
         models_space = models_space,
         get = get,
         list = list,
-        version = version,
+        version = version
     }
 }
-
 
 local function new_spacer(user_opts)
     local valid_options = {
         name = {
             required = false,
-            default = ''
+            default = ""
         },
         migrations = {
             required = true,
-            self_name = 'migrations_path'
+            self_name = "migrations_path"
         },
         global_ft = {
             required = false,
-            default = true,
-        },
-        automigrate = {
-            required = false,
-            default = false,
+            default = true
         },
         keep_obsolete_spaces = {
             required = false,
-            default = false,
+            default = false
         },
         keep_obsolete_indexes = {
             required = false,
-            default = false,
+            default = false
         },
         down_migration_fail_on_impossible = {
             required = false,
-            default = true,
-        },
+            default = true
+        }
     }
 
     local opts = {}
@@ -447,7 +475,7 @@ local function new_spacer(user_opts)
     end
 
     if #invalid_options > 0 then
-        error(string.format('Unknown options provided: [%s]', table.concat(invalid_options, ', ')))
+        error(string.format("Unknown options provided: [%s]", table.concat(invalid_options, ", ")))
     end
 
     -- check that user provided all required options
@@ -469,18 +497,21 @@ local function new_spacer(user_opts)
         end
     end
 
-    local self = setmetatable({
-        name = '',
-        migrations_path = NULL,
-        automigrate = NULL,
-        keep_obsolete_spaces = NULL,
-        keep_obsolete_indexes = NULL,
-        down_migration_fail_on_impossible = NULL,
-        __models__ = {},
-        F = {},
-        F_FULL = {},
-        T = {},
-    }, spacer_mt)
+    local self =
+        setmetatable(
+        {
+            name = "",
+            migrations_path = NULL,
+            keep_obsolete_spaces = NULL,
+            keep_obsolete_indexes = NULL,
+            down_migration_fail_on_impossible = NULL,
+            __models__ = {},
+            F = {},
+            F_FULL = {},
+            T = {}
+        },
+        spacer_mt
+    )
 
     for valid_key, opt_info in pairs(valid_options) do
         if opt_info.self_name == nil then
@@ -490,12 +521,12 @@ local function new_spacer(user_opts)
         self[opt_info.self_name] = opts[valid_key]
     end
 
-    local name_suffix = ''
-    if self.name ~= '' then
-        name_suffix = '_' .. self.name
+    local name_suffix = ""
+    if self.name ~= "" then
+        name_suffix = "_" .. self.name
     end
-    self.schema_key = string.format('_spacer%s_ver', name_suffix)
-    self.models_space_name = string.format('_spacer%s_models', name_suffix)
+    self.schema_key = string.format("_spacer%s_ver", name_suffix)
+    self.models_space_name = string.format("_spacer%s_models", name_suffix)
 
     -- initialize current spaces fields and transformations
     for _, sp in box.space._vspace:pairs() do
@@ -503,22 +534,22 @@ local function new_spacer(user_opts)
     end
 
     if opts.global_ft then
-        rawset(_G, 'F', self.F)
-        rawset(_G, 'F_FULL', self.F_FULL)
-        rawset(_G, 'T', self.T)
+        rawset(_G, "F", self.F)
+        rawset(_G, "F_FULL", self.F_FULL)
+        rawset(_G, "T", self.T)
     end
 
     _init_models_space(self)
 
-    if rawget(_G, '__spacer__') == nil then
-        rawset(_G, '__spacer__', {})
+    if rawget(_G, "__spacer__") == nil then
+        rawset(_G, "__spacer__", {})
     end
-    rawget(_G, '__spacer__')[self.name] = self
+    rawget(_G, "__spacer__")[self.name] = self
 
     return self
 end
 
-local spacers = rawget(_G, '__spacer__')
+local spacers = rawget(_G, "__spacer__")
 if spacers ~= nil then
     -- 2nd+ load
 
@@ -532,7 +563,7 @@ if spacers ~= nil then
             end
         end
 
-        M.__models__ = {}  -- clean all loaded models
+        M.__models__ = {} -- clean all loaded models
         for _, m in ipairs(prune_models) do
             M.F[m] = nil
             M.F_FULL[m] = nil
@@ -549,14 +580,14 @@ end
 return {
     new = new_spacer,
     get = function(name)
-        local spacers = rawget(_G, '__spacer__')
+        local spacers = rawget(_G, "__spacer__")
         if spacers == nil then
-            error('no spacer created yet')
+            error("no spacer created yet")
         end
 
-        local self = spacers[name or '']
+        local self = spacers[name or ""]
         if self == nil then
-            error(string.format('spacer %s not found', name))
+            error(string.format("spacer %s not found", name))
         end
 
         return self

@@ -1,3 +1,7 @@
+v3.1.0
+* Removed automigrate option in spacer. Replaced with a separate method that should be called 
+  when all necessary `spacer:space()` calls are finished. (addresses #13)
+
 v3.0.0
 * Breaking change: changed Spacer api. Now it has 2 methods: new() and get(). `new` creates a new
   spacer instance as usual require 'spacer'({}) call. `get()` returns a spacer
