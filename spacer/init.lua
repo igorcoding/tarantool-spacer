@@ -378,7 +378,7 @@ local function migrate_dummy(self, version)
 end
 
 local function _init_models_space(self)
-    if box.cfg.read_only then
+    if box.info.ro then
         return
     end
 
