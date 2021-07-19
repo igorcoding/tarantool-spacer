@@ -14,6 +14,8 @@ local lversion = require "spacer.version"
 
 local NULL = require "msgpack".NULL
 
+local _init_models_space  -- forward declaration
+
 local function _init_fields_and_transform(self, space_name, format)
     local f, f_extra = space_migration.generate_field_info(format)
     self.F[space_name] = f
@@ -133,6 +135,9 @@ end
 --- migrate_up function
 ---
 local function migrate_up(self, _n)
+    if _init_models_space(self) == nil then
+        error('instance is not writable')
+    end
     local n = tonumber(_n)
     if n == nil and _n ~= nil then
         error("n must be a number or nil")
@@ -183,6 +188,10 @@ end
 --- migrate_down function
 ---
 local function migrate_down(self, _n)
+    if _init_models_space(self) == nil then
+        error('instance is not writable')
+    end
+
     local n = tonumber(_n)
     if n == nil and _n ~= nil then
         error("n must be a number or nil")
@@ -377,7 +386,7 @@ local function migrate_dummy(self, version)
     box.commit()
 end
 
-local function _init_models_space(self)
+_init_models_space = function(self)
     if box.info.ro then
         return
     end
