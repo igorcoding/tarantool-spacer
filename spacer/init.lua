@@ -462,7 +462,11 @@ local function new_spacer(user_opts)
         down_migration_fail_on_impossible = {
             required = false,
             default = true
-        }
+        },
+        hints_enabled = {
+            required = false,
+            default = nil,
+        },
     }
 
     local opts = {}
