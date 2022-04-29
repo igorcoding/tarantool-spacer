@@ -242,6 +242,15 @@ local function indexes_migration(spacer, space_name, indexes, f, f_extra, check_
         end
         ind_opts.if_not_exists = ind.if_not_exists
         ind_opts.sequence = ind.sequence
+        ind_opts.hint = ind.hint
+
+        if ind_opts.hint == nil then
+            ind_opts.hint = spacer.hints_enabled
+        end
+
+        if ind_opts.hint ~= nil and type(ind_opts.hint) ~= 'boolean' then
+            return error("hint for indexes must be boolean or nil")
+        end
 
         if ind_opts.type == "rtree" then
             if ind.dimension ~= nil then
